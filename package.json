@@ -1,0 +1,39 @@
+{
+	"author": {
+		"name": "Ayoub Adib",
+		"email": "adbayb@gmail.com",
+		"url": "https://twitter.com/adbayb"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git@github.com:adbayb/lookat.git"
+	},
+	"license": "MIT",
+	"scripts": {
+		"check:format": "prettier . --ignore-path .gitignore --ignore-path .prettierignore",
+		"check:lint": "eslint . --ignore-path .gitignore",
+		"check:types": "tsc --noEmit",
+		"format": "npm run check:format -- --write",
+		"lint": "npm run check:lint -- --fix"
+	},
+	"prettier": "@adbayb/prettier-config",
+	"eslintConfig": {
+		"extends": "@adbayb"
+	},
+	"husky": {
+		"hooks": {
+			"pre-commit": "lint-staged"
+		}
+	},
+	"lint-staged": {
+		"**/*.{js,jsx,ts,tsx}": [
+			"npm run lint"
+		],
+		"**/*.{json,md,mdx,html,css}": [
+			"npm run format"
+		]
+	},
+	"devDependencies": {
+		"@adbayb/castor": "0.3.1"
+	}
+}
