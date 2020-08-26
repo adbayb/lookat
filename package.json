@@ -14,7 +14,9 @@
 		"check:lint": "eslint . --ignore-path .gitignore",
 		"check:types": "tsc --noEmit",
 		"format": "npm run check:format -- --write",
-		"lint": "npm run check:lint -- --fix"
+		"lint": "npm run check:lint -- --fix",
+		"test": "jest --testRegex specs/*.ts",
+		"sandbox": "parcel example/index.html"
 	},
 	"prettier": "@adbayb/prettier-config",
 	"eslintConfig": {
@@ -34,6 +36,10 @@
 		]
 	},
 	"devDependencies": {
-		"@adbayb/castor": "0.3.1"
+		"@adbayb/castor": "0.3.1",
+		"@types/jest": "26.0.10",
+		"jest": "26.4.2",
+		"parcel-bundler": "1.12.4",
+		"ts-jest": "26.2.0"
 	}
 }

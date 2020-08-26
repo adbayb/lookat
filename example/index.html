@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<style>
+			html {
+				font-family: -apple-system, BlinkMacSystemFont, segoe ui, roboto,
+					oxygen, ubuntu, cantarell, fira sans, droid sans,
+					helvetica neue, sans-serif;
+				box-sizing: border-box;
+			}
+
+			*,
+			*::after,
+			*::before {
+				box-sizing: inherit;
+			}
+
+			body {
+				margin: 0;
+				padding: 0;
+				background-color: rgb(241, 243, 245);
+				max-width: 768px;
+				margin: auto;
+				padding: 24px;
+			}
+
+			.page > *:not(:last-child) {
+				margin-bottom: 36px;
+			}
+
+			em {
+				font-style: normal;
+				color: #89a;
+			}
+
+			h1,
+			h2 {
+				font-weight: 200;
+			}
+
+			h1 {
+				font-size: 40px;
+				margin-bottom: 60px;
+			}
+
+			h2 {
+				font-size: 24px;
+			}
+
+			.card > div {
+				background-color: white;
+				box-shadow: 0 0 2px 0 rgba(0, 0, 0, 0.1);
+				border-radius: 4px;
+				padding: 24px;
+			}
+		</style>
+	</head>
+
+	<body>
+		<h1>Lookat 👀 <em>tests</em></h1>
+		<div id="root"></div>
+		<script src="./index.ts"></script>
+	</body>
+</html>
