@@ -3,14 +3,35 @@ import { observable, observer } from "../src";
 
 // @todo: plugin system via createObservable({ onSet, onGet }) <= onSet <- useState from react for example
 const counter = observable(0);
-const unsubscribe = observer(() => {
-	console.log("Changed", counter.value);
-});
+const data = observable<string | null>(null);
 
+/*
+// Final API:
+const [counter, setCounter] = observable(0) // if we don't use proxy (to check performance proxy vs get()/set() wrapper)
+const [unsubscribe, returnValue] = observer(() => { console.log(counter) })
+*/
+// counter.get() // counter.set(1) / counter.set((prevCounter) => prevCounter + 1) // A la immer ?
+
+// @todo: to simplify observer management, merge observer inside one
+// (by ignoring a nested observer logic inside a parent observer)
+// const unsubscribe = observer(function effect1() {
+// 	console.log("data", data.value);
+// 	// @note: do we really need nested observers ? To test with UI frameworks with render triggering
+// 	observer(function effect2() {
+// 		console.log("counter", counter.value);
+// 	});
+// });
+observer(function effectData() {
+	console.log("data", data.value);
+});
+observer(function effectCounter() {
+	if (counter.value % 2 === 0) {
+		data.value = "pair";
+	}
+});
 setInterval(() => {
 	counter.value++;
 }, 1000);
-unsubscribe();
 
 // @section: Map vs WeakMap and memory impact (see memory panel in devtool)
 // const loadMemoryButton = document.createElement("button");
