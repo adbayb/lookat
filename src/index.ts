@@ -1,128 +1,116 @@
-type ObserverCallback = VoidFunction;
+/*
+Observable API:
+const counter = observable(0); // returns counter.$ ($ is the reactive value accessor making the reactivity explicit in the naming). To mutate, use `counter.$++` for example
+const person = observable({ firstname: "Ayoub", age: 28 }); // returns counter.$.age...
 
-class Observer {
-	callback: ObserverCallback;
-	// @note: the graal will be to use WeakRef with WeakMap to avoid possible memory leak
-	// The compatibility is not yet good enough (maybe progressive enhancement when available?)
-	observables: Observable[];
-	// @note: double linked list to manage nested observers
-	next: Observer | null;
-	previous: Observer | null;
+Observe API:
+const voidValue = observe(() => console.log(counter * 2)); // side effects
+const isPair = observe(() => counter % 2 === 0); // computed reactive value => returns observable value
+observe(() => {
+	console.log(isPair.$)
+})
 
-	constructor(callback: VoidFunction) {
-		this.callback = callback;
-		this.observables = [];
-		this.next = null;
-		this.previous = null;
-	}
+Utilities API:
+unwrap(isPair) // returns raw value of an observable
+*/
 
-	subscribe(observable: Observable) {
-		if (!this.observables.includes(observable)) {
-			this.observables.push(observable);
-			observable.attach(this);
-		}
-	}
-
-	unsubscribe() {
-		const numberOfObservables = this.observables.length;
-
-		for (let i = 0; i < numberOfObservables; i++) {
-			this.observables[i].detach(this);
-		}
-
-		this.observables = [];
-	}
-}
-
-class Observable {
-	observers: Observer[];
-
-	constructor() {
-		this.observers = [];
-	}
-
-	notify() {
-		const numberOfObservers = this.observers.length;
-
-		for (let i = 0; i < numberOfObservers; i++) {
-			this.observers[i].callback();
-		}
-	}
-
-	attach(observer: Observer) {
-		this.observers.push(observer);
-	}
-
-	detach(observer: Observer) {
-		this.observers = this.observers.filter((obs) => obs !== observer);
-	}
-}
+type Observable<Value = unknown> = { $: Value };
+// Observer should not return a function (no closure ! It can lead to untrack items since we don't call the return function)
+// @todo: typing + runtime warning
+type Observer<Value extends unknown = unknown> = () => Value;
 
 type Context = {
-	currentObserver: Observer | null;
+	currentObserverData: {
+		observer: Observer;
+		returnedObservable: Observable;
+	} | null;
+	preventSubscriptionDuringSideEffect: boolean;
+	observables: WeakMap<
+		Record<string, unknown>,
+		Set<NonNullable<typeof context.currentObserverData>>
+	>;
 };
 
-const context: Context = {
-	currentObserver: null,
+export const context: Context = {
+	currentObserverData: null,
+	preventSubscriptionDuringSideEffect: false,
+	observables: new WeakMap(),
 };
 
-export const observable = <Value>(value: Value) => {
-	const observable = new Observable();
-	const returnValue = { value };
-	const handler: ProxyHandler<typeof returnValue> = {
-		get(...args) {
-			const { currentObserver } = context;
+class ObservableHandler<Value extends Record<string, unknown>>
+	implements ProxyHandler<Value> {
+	get(...args: Parameters<NonNullable<ProxyHandler<Value>["get"]>>) {
+		const [target] = args;
+		const {
+			currentObserverData,
+			preventSubscriptionDuringSideEffect,
+		} = context;
 
-			// @note: we only attach the observer if observable is retrieved within an observer
-			if (currentObserver) {
-				currentObserver.subscribe(observable);
+		// @note: we only attach the observer if observable is retrieved within an observer
+		if (currentObserverData && !preventSubscriptionDuringSideEffect) {
+			// @section: subscribe
+			let observers = context.observables.get(target);
+
+			if (!observers) {
+				observers = new Set();
 			}
 
-			return Reflect.get(...args);
-		},
-		set(...args) {
-			// @note: we mutate before notifying to let observers get mutated value
-			const result = Reflect.set(...args);
-
-			// @note: we execute side effect on next tick to avoid infinite loop:
-			setTimeout(() => observable.notify(), 0);
-
-			return result;
-		},
-	};
-
-	return new Proxy(returnValue, handler);
-};
-
-// @todo: memoize the callback but for this callback should be defined statically
-// @todo: to warn about this restriction: add readme disclaimer to avoid conditional callback inside definition
-// provided as parameter logic (for example: observer(isTrue ? callback1 : callback2))
-export const observer = (callback: ObserverCallback) => {
-	const observer = new Observer(callback);
-
-	if (context.currentObserver) {
-		context.currentObserver.next = observer;
-		observer.previous = context.currentObserver;
-	}
-
-	// @note: collect observables via the first call
-	context.currentObserver = observer;
-	callback();
-	context.currentObserver = null;
-	console.log(observer);
-
-	return () => {
-		// @note: traverse the linked list to unsuscribe all nested observers
-		let observerCursor = observer.next;
-
-		while (observerCursor !== null) {
-			observerCursor.unsubscribe();
-			observerCursor = observerCursor.next;
-			console.log("END");
+			// @todo: investigate issue with nested observers which recreate new callback at each call
+			// leading to duplicate function subscription even if no logic inside change
+			observers.add(currentObserverData);
+			context.observables.set(target, observers);
 		}
 
-		// @note: unscribe the root observer
-		// @todo: set next and previous to null inside unsubscribe function
-		observer.unsubscribe();
-	};
+		return Reflect.get(...args);
+	}
+
+	set(...args: Parameters<NonNullable<ProxyHandler<Value>["set"]>>) {
+		const [target] = args;
+		// @note: we mutate before notifying to let observers get mutated value
+		const result = Reflect.set(...args);
+		const observers = context.observables.get(target);
+
+		if (!observers) {
+			return result;
+		}
+
+		// @section: notify
+		// @note: to avoid infinite loop while triggering external observer side effects during a given observer call
+		context.preventSubscriptionDuringSideEffect = true;
+		observers.forEach(({ observer, returnedObservable }) => {
+			returnedObservable.$ = observer();
+		});
+		context.preventSubscriptionDuringSideEffect = false;
+
+		return result;
+	}
+}
+
+export const observable = <Value>(value: Value): Observable<Value> => {
+	return new Proxy({ $: value }, new ObservableHandler());
+};
+
+export const observe = <CallbackReturnValue extends unknown>(
+	observer: Observer<CallbackReturnValue>
+): Observable<CallbackReturnValue> => {
+	// @todo: optimize observable to wrap with proxy only if they're consumed inside observer or their setter is called:
+	const returnedObservable = observable<CallbackReturnValue>(undefined!);
+
+	// @note: if we've already a currentObserverData set, it means that we're inside a nested observer case
+	// We ignore the nested observer and keep the root observer as the single observer source of truth:
+	if (!context.currentObserverData) {
+		context.currentObserverData = {
+			observer,
+			returnedObservable,
+		};
+		// @note: collect observables via the first call
+		returnedObservable.$ = observer();
+		context.currentObserverData = null;
+	} else {
+		// @todo: throw error
+		// We don't accept nested observer (unexpected behavior (what's the behavior for observable returned by nested observers?) and complexify memory efficient management)
+		observer();
+	}
+
+	return returnedObservable;
 };

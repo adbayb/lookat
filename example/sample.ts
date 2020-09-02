@@ -1,37 +1,31 @@
-// @ts-nocheck
-import { observable, observer } from "../src";
+import { context, observable, observe } from "../src";
 
 // @todo: plugin system via createObservable({ onSet, onGet }) <= onSet <- useState from react for example
 const counter = observable(0);
 const data = observable<string | null>(null);
 
-/*
-// Final API:
-const [counter, setCounter] = observable(0) // if we don't use proxy (to check performance proxy vs get()/set() wrapper)
-const [unsubscribe, returnValue] = observer(() => { console.log(counter) })
-*/
-// counter.get() // counter.set(1) / counter.set((prevCounter) => prevCounter + 1) // A la immer ?
-
-// @todo: to simplify observer management, merge observer inside one
-// (by ignoring a nested observer logic inside a parent observer)
-// const unsubscribe = observer(function effect1() {
-// 	console.log("data", data.value);
-// 	// @note: do we really need nested observers ? To test with UI frameworks with render triggering
-// 	observer(function effect2() {
-// 		console.log("counter", counter.value);
+observe(function effectData() {
+	console.log("data change", data.$);
+});
+// observe(function effectCounter() {
+// 	console.log("counter change", counter.$);
+// 	if (counter.$ % 2 === 0) {
+// 		data.$ = "pair";
+// 	}
+// 	observe(function effectCounter2() {
+// 		console.log("counter change 2", counter.$);
 // 	});
 // });
-observer(function effectData() {
-	console.log("data", data.value);
+
+const isPair = observe(() => {
+	return counter.$ % 2 === 0;
 });
-observer(function effectCounter() {
-	if (counter.value % 2 === 0) {
-		data.value = "pair";
-	}
-});
+
 setInterval(() => {
-	counter.value++;
+	counter.$++;
+	console.log(isPair.$, counter.$);
 }, 1000);
+console.log(context);
 
 // @section: Map vs WeakMap and memory impact (see memory panel in devtool)
 // const loadMemoryButton = document.createElement("button");
