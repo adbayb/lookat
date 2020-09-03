@@ -14,26 +14,34 @@ Utilities API:
 unwrap(isPair) // returns raw value of an observable
 */
 
+/*
+TODO:
+
+- Optimize same observer calls if the side effect relies on computed observables:
+const counter = observable(0);
+const counterSquare = observe(() => counter.$ * 2);
+observe(() => {
+	console.log("Counter Quatro = ", counter.$, " ", counterSquare.$);
+});
+// => Currently, it's called two times since the observer relies on two observables but it could be improved with some predicates to be called once
+
+*/
+
 type Observable<Value = unknown> = { $: Value };
 // Observer should not return a function (no closure ! It can lead to untrack items since we don't call the return function)
 // @todo: typing + runtime warning
 type Observer<Value extends unknown = unknown> = () => Value;
 
 type Context = {
-	currentObserverData: {
-		observer: Observer;
-		returnedObservable: Observable;
-	} | null;
+	currentObserverCallback?: VoidFunction;
 	preventSubscriptionDuringSideEffect: boolean;
-	observables: WeakMap<
-		Record<string, unknown>,
-		Set<NonNullable<typeof context.currentObserverData>>
-	>;
+	preventNestedObserverSubscription: boolean;
+	observables: WeakMap<Record<string, unknown>, Set<Observer>>;
 };
 
 export const context: Context = {
-	currentObserverData: null,
 	preventSubscriptionDuringSideEffect: false,
+	preventNestedObserverSubscription: false,
 	observables: new WeakMap(),
 };
 
@@ -42,12 +50,12 @@ class ObservableHandler<Value extends Record<string, unknown>>
 	get(...args: Parameters<NonNullable<ProxyHandler<Value>["get"]>>) {
 		const [target] = args;
 		const {
-			currentObserverData,
+			currentObserverCallback,
 			preventSubscriptionDuringSideEffect,
 		} = context;
 
 		// @note: we only attach the observer if observable is retrieved within an observer
-		if (currentObserverData && !preventSubscriptionDuringSideEffect) {
+		if (currentObserverCallback && !preventSubscriptionDuringSideEffect) {
 			// @section: subscribe
 			let observers = context.observables.get(target);
 
@@ -55,9 +63,7 @@ class ObservableHandler<Value extends Record<string, unknown>>
 				observers = new Set();
 			}
 
-			// @todo: investigate issue with nested observers which recreate new callback at each call
-			// leading to duplicate function subscription even if no logic inside change
-			observers.add(currentObserverData);
+			observers.add(currentObserverCallback);
 			context.observables.set(target, observers);
 		}
 
@@ -77,9 +83,7 @@ class ObservableHandler<Value extends Record<string, unknown>>
 		// @section: notify
 		// @note: to avoid infinite loop while triggering external observer side effects during a given observer call
 		context.preventSubscriptionDuringSideEffect = true;
-		observers.forEach(({ observer, returnedObservable }) => {
-			returnedObservable.$ = observer();
-		});
+		observers.forEach((observer) => observer());
 		context.preventSubscriptionDuringSideEffect = false;
 
 		return result;
@@ -96,21 +100,21 @@ export const observe = <CallbackReturnValue extends unknown>(
 	// @todo: optimize observable to wrap with proxy only if they're consumed inside observer or their setter is called:
 	const returnedObservable = observable<CallbackReturnValue>(undefined!);
 
-	// @note: if we've already a currentObserverData set, it means that we're inside a nested observer case
+	// @note: if we've already a currentObserverCallbackData set, it means that we're inside a nested observer case
 	// We ignore the nested observer and keep the root observer as the single observer source of truth:
-	if (!context.currentObserverData) {
-		context.currentObserverData = {
-			observer,
-			returnedObservable,
-		};
+	if (context.preventNestedObserverSubscription) {
+		returnedObservable.$ = observer();
+
+		return returnedObservable;
+	}
+
+	context.currentObserverCallback = () => {
+		context.preventNestedObserverSubscription = true;
 		// @note: collect observables via the first call
 		returnedObservable.$ = observer();
-		context.currentObserverData = null;
-	} else {
-		// @todo: throw error
-		// We don't accept nested observer (unexpected behavior (what's the behavior for observable returned by nested observers?) and complexify memory efficient management)
-		observer();
-	}
+		context.preventNestedObserverSubscription = false;
+	};
+	context.currentObserverCallback();
 
 	return returnedObservable;
 };
