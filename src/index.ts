@@ -33,15 +33,14 @@ type Observable<Value = unknown> = { $: Value };
 type Observer<Value extends unknown = unknown> = () => Value;
 
 type Context = {
-	currentObserverCallback?: VoidFunction;
+	currentObserverCallback: VoidFunction | null;
 	preventSubscriptionDuringSideEffect: boolean;
-	preventNestedObserverSubscription: boolean;
 	observables: WeakMap<Record<string, unknown>, Set<Observer>>;
 };
 
 export const context: Context = {
+	currentObserverCallback: null,
 	preventSubscriptionDuringSideEffect: false,
-	preventNestedObserverSubscription: false,
 	observables: new WeakMap(),
 };
 
@@ -100,21 +99,22 @@ export const observe = <CallbackReturnValue extends unknown>(
 	// @todo: optimize observable to wrap with proxy only if they're consumed inside observer or their setter is called:
 	const returnedObservable = observable<CallbackReturnValue>(undefined!);
 
-	// @note: if we've already a currentObserverCallbackData set, it means that we're inside a nested observer case
-	// We ignore the nested observer and keep the root observer as the single observer source of truth:
-	if (context.preventNestedObserverSubscription) {
+	// @note: if we've already a callback set, it means that we're inside a nested observer case
+	// We ignore the nested observer and keep the root observer as the single source of truth:
+	if (context.currentObserverCallback) {
 		returnedObservable.$ = observer();
 
 		return returnedObservable;
 	}
 
 	context.currentObserverCallback = () => {
-		context.preventNestedObserverSubscription = true;
 		// @note: collect observables via the first call
+		// and keep updating the computed value if needed:
+		// @todo: optimize here to not always wrap the return value with a proxy?
 		returnedObservable.$ = observer();
-		context.preventNestedObserverSubscription = false;
 	};
 	context.currentObserverCallback();
+	context.currentObserverCallback = null;
 
 	return returnedObservable;
 };
