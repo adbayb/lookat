@@ -1,17 +1,38 @@
-import { observable, observer } from "../src";
+import { observable, observe } from "../src";
 
 describe("observable", () => {
-	test("should notify observer on change", () => {
+	test("should observe side effects", () => {
 		const counter = observable(0);
 		const callback = jest.fn(() => {
-			return counter.value;
+			counter.$;
 		});
 
-		observer(callback);
+		observe(callback);
 		expect(callback).toHaveBeenCalledTimes(1);
-		expect(callback).toHaveReturnedWith(0);
-		counter.value++;
+		counter.$++;
 		expect(callback).toHaveBeenCalledTimes(2);
-		expect(callback).toHaveReturnedWith(1);
+	});
+	test("should not subscribe nested observers", () => {
+		const state = observable(0);
+		const nestedState = observable(0);
+		const callback = jest.fn(() => {
+			observe(() => {
+				nestedState.$ * 2;
+			});
+			state.$;
+		});
+
+		observe(callback);
+		expect(callback).toHaveBeenCalledTimes(1);
+		state.$++;
+		expect(callback).toHaveBeenCalledTimes(2);
+		nestedState.$++;
+		expect(callback).toHaveBeenCalledTimes(3);
+	});
+	test("should compute derived observable", () => {
+		expect(true).toBe(true);
+	});
+	test("should observe computed observable", () => {
+		expect(true).toBe(true);
 	});
 });
