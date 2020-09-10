@@ -1,4 +1,5 @@
-import { observable, observe } from "../src";
+import { observable } from "../src";
+import { observe } from "../src";
 
 describe("observable", () => {
 	test("should observe side effects", () => {
@@ -12,6 +13,7 @@ describe("observable", () => {
 		counter.$++;
 		expect(callback).toHaveBeenCalledTimes(2);
 	});
+
 	test("should observe and compute derived observable", () => {
 		const value = observable(0);
 		const doubleValue = observe(() => value.$ * 2);
@@ -29,6 +31,7 @@ describe("observable", () => {
 		expect(doubleValue.$).toBe(4);
 		expect(callback).toHaveReturnedWith(4);
 	});
+
 	test("should make the root observer the single source of truth and not subscribe nested observers", () => {
 		const state = observable(0);
 		const nestedState = observable(0);
@@ -45,5 +48,23 @@ describe("observable", () => {
 		expect(callback).toHaveBeenCalledTimes(2);
 		nestedState.$++;
 		expect(callback).toHaveBeenCalledTimes(3);
+	});
+
+	test("should observe object property update", () => {
+		const person = observable({ firstName: "Ayoub", age: 28 });
+		const handleAgeChange = jest.fn(() => {
+			person.$.age;
+		});
+		const handleFirstNameChange = jest.fn(() => {
+			person.$;
+		});
+
+		observe(handleAgeChange);
+		observe(handleFirstNameChange);
+
+		person.$.age++;
+
+		expect(handleFirstNameChange).toHaveBeenCalledTimes(1);
+		expect(handleAgeChange).toHaveBeenCalledTimes(2);
 	});
 });

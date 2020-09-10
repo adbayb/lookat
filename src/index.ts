@@ -17,6 +17,9 @@ unwrap(isPair) // returns raw value of an observable
 /*
 TODO:
 
+- Enable more granular proxy for objects (per properties)
+- Enable Array/Map/WeakMap/Set observables
+- Do not call observers if impacted value is not modified (check inside the setter trap)
 - Optimize same observer calls if the side effect relies on computed observables:
 const counter = observable(0);
 const counterSquare = observe(() => counter.$ * 2);
@@ -25,9 +28,13 @@ observe(() => {
 });
 // => Currently, it's called two times since the observer relies on two observables but it could be improved with some predicates to be called once
 
+- Optimize Proxy wrapping?
+- Performance/Memory benchmark
+- Readme + Hosted documentation
 */
 
 type Observable<Value = unknown> = { $: Value };
+
 // Observer should not return a function (no closure ! It can lead to untrack items since we don't call the return function)
 // @todo: typing + runtime warning
 type Observer<Value extends unknown = unknown> = () => Value;

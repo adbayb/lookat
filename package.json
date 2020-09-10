@@ -20,7 +20,87 @@
 	},
 	"prettier": "@adbayb/prettier-config",
 	"eslintConfig": {
-		"extends": "@adbayb"
+		"extends": "@adbayb",
+		"rules": {
+			"padding-line-between-statements": [
+				"error",
+				{
+					"blankLine": "always",
+					"prev": "*",
+					"next": "*"
+				},
+				{
+					"blankLine": "never",
+					"prev": [
+						"const",
+						"let",
+						"var"
+					],
+					"next": [
+						"const",
+						"let",
+						"var"
+					]
+				},
+				{
+					"blankLine": "never",
+					"prev": [
+						"case",
+						"default"
+					],
+					"next": [
+						"case",
+						"default"
+					]
+				},
+				{
+					"blankLine": "any",
+					"prev": [
+						"expression"
+					],
+					"next": [
+						"expression"
+					]
+				},
+				{
+					"blankLine": "any",
+					"prev": [
+						"multiline-const",
+						"multiline-let",
+						"multiline-var"
+					],
+					"next": [
+						"const",
+						"let",
+						"var"
+					]
+				},
+				{
+					"blankLine": "any",
+					"prev": [
+						"const",
+						"let",
+						"var"
+					],
+					"next": [
+						"multiline-const",
+						"multiline-let",
+						"multiline-var"
+					]
+				},
+				{
+					"blankLine": "any",
+					"prev": [
+						"cjs-import",
+						"import"
+					],
+					"next": [
+						"cjs-import",
+						"import"
+					]
+				}
+			]
+		}
 	},
 	"husky": {
 		"hooks": {
