@@ -18,8 +18,12 @@ unwrap(isPair) // returns raw value of an observable
 TODO:
 
 - Enable more granular proxy for objects (per properties)
-- Enable Array/Map/WeakMap/Set observables
+- Enable Array/Map/WeakMap/Set observables (+ add tests)
 - Do not call observers if impacted value is not modified (check inside the setter trap)
+- Optimize Proxy wrapping => do not use observe api but instead observable api to define derived observables as well:
+const counter = observable(0)
+const counterSquare = observable(counter.$ * 2)
+
 - Optimize same observer calls if the side effect relies on computed observables:
 const counter = observable(0);
 const counterSquare = observe(() => counter.$ * 2);
@@ -28,7 +32,6 @@ observe(() => {
 });
 // => Currently, it's called two times since the observer relies on two observables but it could be improved with some predicates to be called once
 
-- Optimize Proxy wrapping?
 - Performance/Memory benchmark
 - Readme + Hosted documentation
 */
@@ -78,6 +81,10 @@ class ObservableHandler<Value extends Record<string, unknown>>
 
 	set(...args: Parameters<NonNullable<ProxyHandler<Value>["set"]>>) {
 		const [target] = args;
+
+		// @note: https://stackoverflow.com/questions/41299642/how-to-use-javascript-proxy-for-nested-objects
+		console.log(args);
+
 		// @note: we mutate before notifying to let observers get mutated value
 		const result = Reflect.set(...args);
 		const observers = context.observables.get(target);

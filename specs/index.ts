@@ -50,12 +50,15 @@ describe("observable", () => {
 		expect(callback).toHaveBeenCalledTimes(3);
 	});
 
-	test("should observe object property update", () => {
+	test("should observe nested object property update", () => {
 		const person = observable({ firstName: "Ayoub", age: 28 });
 		const handleAgeChange = jest.fn(() => {
 			person.$.age;
 		});
 		const handleFirstNameChange = jest.fn(() => {
+			person.$.firstName;
+		});
+		const handleObjectChange = jest.fn(() => {
 			person.$;
 		});
 
@@ -64,7 +67,14 @@ describe("observable", () => {
 
 		person.$.age++;
 
+		expect(handleObjectChange).toHaveBeenCalledTimes(1);
 		expect(handleFirstNameChange).toHaveBeenCalledTimes(1);
+		expect(handleAgeChange).toHaveBeenCalledTimes(2);
+
+		person.$ = { firstName: "Joe", age: 28 };
+
+		expect(handleObjectChange).toHaveBeenCalledTimes(2);
+		expect(handleFirstNameChange).toHaveBeenCalledTimes(2);
 		expect(handleAgeChange).toHaveBeenCalledTimes(2);
 	});
 });
