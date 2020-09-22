@@ -42,50 +42,70 @@ export type Observable<Value> = { $: Value };
 // @todo: typing + runtime warning
 type Observer = VoidFunction;
 
+type Target = Record<string, unknown>;
+
 type Context = {
 	currentObserverCallback: Observer | null;
 	preventSubscriptionDuringSideEffect: boolean;
-	observables: WeakMap<Record<string, unknown>, Set<Observer>>;
+	observers: WeakMap<Target, Observer[]>;
+	// @todo: remove proxies (needed only to prevent creating multiple instances of proxies)
+	// Might be better and less memory consuming to store an extra private proxy property to check if we've already a proxy
+	// @see: https://stackoverflow.com/questions/41299642/how-to-use-javascript-proxy-for-nested-objects
+	proxies: WeakMap<Target, Target>;
 };
 
 const context: Context = {
 	currentObserverCallback: null,
 	preventSubscriptionDuringSideEffect: false,
-	observables: new WeakMap(),
+	observers: new WeakMap(),
+	proxies: new WeakMap(),
 };
+
+const isObject = (value: unknown): value is Record<string, unknown> => {
+	return typeof value === "object" && value !== null;
+};
+
+const callbacks: WeakMap<Target, Record<string, Observer[]>> = new WeakMap();
 
 class ObservableHandler<Value extends Record<string, unknown>>
 	implements ProxyHandler<Value> {
 	get(...args: Parameters<NonNullable<ProxyHandler<Value>["get"]>>) {
-		const [target] = args;
+		const [target, key] = args;
 		const {
 			currentObserverCallback,
 			preventSubscriptionDuringSideEffect,
 		} = context;
+		// @ts-ignore
+		const value = target[key];
 
+		// @section: subscribe
 		// @note: we only attach the observer if observable is retrieved within an observer
 		if (currentObserverCallback && !preventSubscriptionDuringSideEffect) {
-			// @section: subscribe
-			let observers = context.observables.get(target);
+			const objectKey = key.toString();
 
-			if (!observers) {
-				observers = new Set();
-			}
+			console.log(`get->${objectKey}`, target, target[objectKey]);
 
-			observers.add(currentObserverCallback);
-			context.observables.set(target, observers);
+			const objectCallbacks = callbacks.get(target);
+
+			callbacks.set(target, {
+				...objectCallbacks,
+				[objectKey]: [
+					...(objectCallbacks?.[objectKey] || []),
+					currentObserverCallback,
+				],
+			});
 		}
 
-		return Reflect.get(...args);
+		return isObject(value) ? proxify(value) : Reflect.get(...args);
 	}
 
 	set(...args: Parameters<NonNullable<ProxyHandler<Value>["set"]>>) {
-		const [target] = args;
-		// @note: https://stackoverflow.com/questions/41299642/how-to-use-javascript-proxy-for-nested-objects
-		// console.log(args);
+		const [target, key] = args;
 		// @note: we mutate before notifying to let observers get mutated value
 		const result = Reflect.set(...args);
-		const observers = context.observables.get(target);
+		const observers = callbacks.get(target)?.[key.toString()];
+
+		// console.warn(`set->${key}`);
 
 		if (!observers) {
 			return result;
@@ -111,17 +131,29 @@ export const observe = (callback: Observer) => {
 		return;
 	}
 
-	context.currentObserverCallback = () => {
-		// @note: collect observables via the first call
-		// and keep updating the computed value if needed:
-		callback();
-	};
+	// @note: collect observables via the first call
+	// and keep updating the computed value if needed:
+	context.currentObserverCallback = callback;
 	context.currentObserverCallback();
 	context.currentObserverCallback = null;
 };
 
+const proxify = (target: Target): Target => {
+	const ctxProxy = context.proxies.get(target);
+
+	if (ctxProxy) {
+		return ctxProxy;
+	}
+
+	const proxy = new Proxy(target, new ObservableHandler());
+
+	context.proxies.set(target, proxy);
+
+	return proxy;
+};
+
 const createObservable = <Value>(value: Value): Observable<Value> => {
-	return new Proxy({ $: value }, new ObservableHandler());
+	return proxify({ $: value }) as Observable<Value>;
 };
 
 // @todo: object, array, ...
@@ -151,3 +183,7 @@ export const observable = <Value>(
 
 	return computedObservable;
 };
+
+setTimeout(() => {
+	console.log(context, callbacks);
+}, 1000);

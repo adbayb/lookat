@@ -50,7 +50,7 @@ describe("observable", () => {
 		expect(callback).toHaveBeenCalledTimes(3);
 	});
 
-	test.skip("should observe nested object property update", () => {
+	test("should observe nested object property update", () => {
 		const person = observable({ firstName: "Ayoub", age: 28 });
 		const handleAgeChange = jest.fn(() => {
 			person.$.age;
