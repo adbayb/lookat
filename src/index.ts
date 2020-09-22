@@ -36,19 +36,19 @@ observe(() => {
 - Readme + Hosted documentation
 */
 
-type Observable<Value = unknown> = { $: Value };
+export type Observable<Value> = { $: Value };
 
 // Observer should not return a function (no closure ! It can lead to untrack items since we don't call the return function)
 // @todo: typing + runtime warning
-type Observer<Value extends unknown = unknown> = () => Value;
+type Observer = VoidFunction;
 
 type Context = {
-	currentObserverCallback: VoidFunction | null;
+	currentObserverCallback: Observer | null;
 	preventSubscriptionDuringSideEffect: boolean;
 	observables: WeakMap<Record<string, unknown>, Set<Observer>>;
 };
 
-export const context: Context = {
+const context: Context = {
 	currentObserverCallback: null,
 	preventSubscriptionDuringSideEffect: false,
 	observables: new WeakMap(),
@@ -81,10 +81,8 @@ class ObservableHandler<Value extends Record<string, unknown>>
 
 	set(...args: Parameters<NonNullable<ProxyHandler<Value>["set"]>>) {
 		const [target] = args;
-
 		// @note: https://stackoverflow.com/questions/41299642/how-to-use-javascript-proxy-for-nested-objects
-		console.log(args);
-
+		// console.log(args);
 		// @note: we mutate before notifying to let observers get mutated value
 		const result = Reflect.set(...args);
 		const observers = context.observables.get(target);
@@ -103,32 +101,53 @@ class ObservableHandler<Value extends Record<string, unknown>>
 	}
 }
 
-export const observable = <Value>(value: Value): Observable<Value> => {
-	return new Proxy({ $: value }, new ObservableHandler());
-};
-
-export const observe = <CallbackReturnValue extends unknown>(
-	observer: Observer<CallbackReturnValue>
-): Observable<CallbackReturnValue> => {
-	// @todo: optimize observable to wrap with proxy only if they're consumed inside observer or their setter is called:
-	const returnedObservable = observable<CallbackReturnValue>(undefined!);
-
+export const observe = (callback: Observer) => {
 	// @note: if we've already a callback set, it means that we're inside a nested observer case
-	// We ignore the nested observer and keep the root observer as the single source of truth:
+	// We ignore the nested observer by calling it without observer logic modifications
+	// and keep the root observer as the single source of truth for the currentObserverCallback:
 	if (context.currentObserverCallback) {
-		returnedObservable.$ = observer();
+		callback();
 
-		return returnedObservable;
+		return;
 	}
 
 	context.currentObserverCallback = () => {
 		// @note: collect observables via the first call
 		// and keep updating the computed value if needed:
-		// @todo: optimize here to not always wrap the return value with a proxy?
-		returnedObservable.$ = observer();
+		callback();
 	};
 	context.currentObserverCallback();
 	context.currentObserverCallback = null;
+};
 
-	return returnedObservable;
+const createObservable = <Value>(value: Value): Observable<Value> => {
+	return new Proxy({ $: value }, new ObservableHandler());
+};
+
+// @todo: object, array, ...
+export const observable = <Value>(
+	value: Value | (() => Value)
+): Observable<Value> => {
+	/*
+	// @todo: check feasability of:
+	const proxifiedObj = new Proxy({ $: value }, new ObservableHandler());
+	return proxifiedObj.$
+	// And consumer side: let counter = observable(0); counter++; Instead of counter.$++
+	*/
+
+	if (context.currentObserverCallback) {
+		throw new Error("`observable` must not be affected inside `observe`");
+	}
+
+	if (typeof value !== "function") {
+		return createObservable(value);
+	}
+
+	const computedObservable: Observable<Value> = createObservable(undefined!);
+
+	observe(() => {
+		computedObservable.$ = (value as () => Value)();
+	});
+
+	return computedObservable;
 };

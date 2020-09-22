@@ -1,4 +1,4 @@
-import { context, observable, observe } from "../src";
+import { observable, observe } from "../src";
 
 // @todo: plugin system via createObservable({ onSet, onGet }) <= onSet <- useState from react for example
 const counter = observable(0);
@@ -17,15 +17,14 @@ observe(function effectData() {
 // 	});
 // });
 
-const isPair = observe(() => {
+observe(() => {
 	return counter.$ % 2 === 0;
 });
 
 setInterval(() => {
 	counter.$++;
-	console.log(isPair.$, counter.$);
+	console.log(counter.$);
 }, 1000);
-console.log(context);
 
 // @section: Map vs WeakMap and memory impact (see memory panel in devtool)
 // const loadMemoryButton = document.createElement("button");

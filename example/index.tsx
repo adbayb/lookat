@@ -3,11 +3,7 @@ import { render } from "react-dom";
 import { Counter } from "./Counter";
 
 const App = () => {
-	return (
-		<div>
-			<Counter />
-		</div>
-	);
+	return <Counter />;
 };
 
 render(<App />, document.getElementById("root"));

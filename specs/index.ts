@@ -16,7 +16,7 @@ describe("observable", () => {
 
 	test("should observe and compute derived observable", () => {
 		const value = observable(0);
-		const doubleValue = observe(() => value.$ * 2);
+		const doubleValue = observable(() => value.$ * 2);
 		const callback = jest.fn(() => {
 			return doubleValue.$;
 		});
@@ -32,7 +32,7 @@ describe("observable", () => {
 		expect(callback).toHaveReturnedWith(4);
 	});
 
-	test("should make the root observer the single source of truth and not subscribe nested observers", () => {
+	test("should ignore nested observers subscriptions", () => {
 		const state = observable(0);
 		const nestedState = observable(0);
 		const callback = jest.fn(() => {
@@ -50,7 +50,7 @@ describe("observable", () => {
 		expect(callback).toHaveBeenCalledTimes(3);
 	});
 
-	test("should observe nested object property update", () => {
+	test.skip("should observe nested object property update", () => {
 		const person = observable({ firstName: "Ayoub", age: 28 });
 		const handleAgeChange = jest.fn(() => {
 			person.$.age;

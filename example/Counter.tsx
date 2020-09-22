@@ -1,33 +1,41 @@
 import * as React from "react";
-import { observable, observe } from "../src";
+import { Observable, observable, observe } from "../src";
 
 const counter = observable(0);
-// const counterSquare = observe(() => counter.$ * 2);
+const derivedCounter = observable(() => counter.$ * 2);
 
 setInterval(() => {
 	counter.$++;
 }, 1000);
 
-const nestedComputed = observe(() => {
-	const nested = observe(() => {
-		return counter.$ * 4;
+observe(() => {
+	observe(() => {
+		counter.$ * 4;
 	});
-
-	return nested.$;
+	console.log("Nested", counter.$);
 });
 
 observe(() => {
-	console.log("Nested", nestedComputed.$);
+	console.log("Computed", derivedCounter.$);
 });
 
-export const Counter = () => {
-	const [element, setElement] = React.useState<JSX.Element>();
+const useObservable = <Value extends unknown>(
+	observableValue: Observable<Value>
+) => {
+	const [uiValue, setUIValue] = React.useState(observableValue.$);
 
 	React.useEffect(() => {
 		observe(() => {
-			setElement(<span>{counter.$}</span>);
+			setUIValue(observableValue.$);
 		});
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	return <>{element} Plop</>;
+	return uiValue;
+};
+
+export const Counter = () => {
+	const value = useObservable(counter);
+
+	return <span>{value}</span>;
 };
