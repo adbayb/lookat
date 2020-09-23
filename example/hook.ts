@@ -4,14 +4,14 @@ import { Observable, observe } from "../src";
 export const useObservable = <Value extends unknown>(
 	observableValue: Observable<Value>
 ) => {
-	const [uiValue, setUIValue] = React.useState(observableValue.$);
+	const state = React.useState(observableValue.$);
 
 	React.useEffect(() => {
 		observe(() => {
-			setUIValue(observableValue.$);
+			state[1](observableValue.$);
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	return uiValue;
+	return observableValue;
 };
