@@ -15,15 +15,17 @@ observe(() => {
 	console.log("FirstName", person.$.firstName);
 });
 
-observe(() => {
-	// @todo: should be called if children property is updated
-	// @todo2: person.$ = { firstName: "New", age: 28 } should proxify the affected object
-	console.log("Root", person.$);
-});
+// observe(() => {
+// 	// @todo: should be called if children property is updated
+// 	// @todo2: person.$ = { firstName: "New", age: 28 } should proxify the affected object
+// 	console.log("Root", person.$);
+// });
 
 export const Person = () => {
 	return (
-		<div>
+		<div
+			style={{ display: "grid", gridTemplateColumns: "1fr", gridGap: 8 }}
+		>
 			<span>👋</span>
 			<button
 				onClick={() => {
@@ -36,15 +38,13 @@ export const Person = () => {
 			</button>
 			<button
 				onClick={() => {
-					// @todo: should proxify new object in order to be tracked next time !
-					// For example here, clicking on reset breaks random firstname generation if the user tries to generate it after the reset
+					// @todo: to test notifier reliability, check really deep object reset (2 nested levels for examples). For example: person.$.parent.father = {}
 					// @ts-ignore
 					person.$ = {};
 				}}
 			>
 				Reset
 			</button>
-
 			<button
 				onClick={() => {
 					// @todo: should proxify new object in order to be tracked next time !

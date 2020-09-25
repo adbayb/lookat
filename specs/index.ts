@@ -106,13 +106,15 @@ describe("object", () => {
 		);
 	});
 
-	test("should observe parent property update", () => {
+	test("should observe cascade property updates", () => {
 		observe(handleAgeChange);
 		observe(handleFirstNameChange);
 
 		// @ts-ignore
 		person.$ = {};
 
+		// @todo: should be fine (working as expected in a non test environment)
+		// Check why jest handles it differently
 		expect(handleFirstNameChange).toHaveBeenCalledTimes(
 			INITIAL_OBSERVE_COUNT + 1
 		);

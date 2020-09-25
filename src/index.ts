@@ -45,8 +45,8 @@ type Observer = VoidFunction;
 type Target = Record<string, unknown>;
 
 type Context = {
-	currentObserverCallback: Observer | null;
-	observers: WeakMap<Target, Observer[]>;
+	currentObserver: Observer | null;
+	observers: WeakMap<Target, Record<string, Observer[]>>;
 	// @todo: remove proxies (needed only to prevent creating multiple instances of proxies)
 	// Might be better and less memory consuming to store an extra private proxy property to check if we've already a proxy
 	// @see: https://stackoverflow.com/questions/41299642/how-to-use-javascript-proxy-for-nested-objects
@@ -54,7 +54,7 @@ type Context = {
 };
 
 const context: Context = {
-	currentObserverCallback: null,
+	currentObserver: null,
 	observers: new WeakMap(),
 	proxies: new WeakMap(),
 };
@@ -63,34 +63,33 @@ const isObject = (value: unknown): value is Record<string, unknown> => {
 	return typeof value === "object" && value !== null;
 };
 
-const callbacks: WeakMap<Target, Record<string, Observer[]>> = new WeakMap();
-
 class ObservableHandler<Value extends Record<string, unknown>>
 	implements ProxyHandler<Value> {
 	get(...args: Parameters<NonNullable<ProxyHandler<Value>["get"]>>) {
 		const [target, key] = args;
-		const { currentObserverCallback } = context;
+		const { currentObserver } = context;
 		const objectKey = key.toString();
 		const value = target[objectKey];
 
 		// @section: subscribe
-		if (currentObserverCallback) {
+		if (currentObserver) {
 			// console.log(`get->${objectKey}`, target, target[objectKey]);
+			const rootCallbacks = context.observers.get(target) || {};
+			// @note: we map current observer to all traversed properties (not only the last accessed property)
+			// to allow nested observers to be notified in case of parent properties reset.
+			// For example, if we have following observable shape: person = { firstName: "Ayoub", age: 28 }
+			// If we reset its nested values via person.$ = {}
+			// We expect that observers associated to "firstName" and "age" property are called
+			// Mapping also the observers to $ parent property allows to call those observers and create new proxy around the empty reset object
+			// to track future updates:
+			const propertyCallbacks = rootCallbacks[objectKey] || [];
 
-			const objectCallbacks = callbacks.get(target);
-			const propertyCallbacks = objectCallbacks?.[objectKey] || [];
+			if (!propertyCallbacks.includes(currentObserver)) {
+				propertyCallbacks.push(currentObserver);
+				rootCallbacks[objectKey] = propertyCallbacks;
 
-			if (!propertyCallbacks.includes(currentObserverCallback)) {
-				propertyCallbacks.push(currentObserverCallback);
-				// objectCallbacks[objectKey] = propertyCallbacks;
-
-				callbacks.set(target, {
-					...objectCallbacks,
-					[objectKey]: propertyCallbacks,
-				});
+				context.observers.set(target, rootCallbacks);
 			}
-		} else {
-			// console.log("OUTSIDE", `get->${objectKey}`);
 		}
 
 		return isObject(value) ? proxify(value) : Reflect.get(...args);
@@ -100,9 +99,8 @@ class ObservableHandler<Value extends Record<string, unknown>>
 		const [target, key] = args;
 		// @note: we mutate before notifying to let observers get mutated value
 		const result = Reflect.set(...args);
-		const observers = callbacks.get(target)?.[key.toString()];
-
-		// console.warn(`set->${key}`);
+		const observers = context.observers.get(target)?.[key.toString()];
+		// console.warn(`set->${key.toString()}`, target, context);
 
 		if (!observers) {
 			return result;
@@ -115,25 +113,30 @@ class ObservableHandler<Value extends Record<string, unknown>>
 	}
 }
 
-export const observe = (callback: Observer) => {
+const createObserver = (callback: VoidFunction): Observer => {
+	const observer = () => {
+		// @note: we collect all observer dependencies (eg. observables) each time the callback is fired
+		// by making sure to set the observer as the current global one (throughout context object)
+		// each time the callback is fired (thanks to corresponding dependency proxy setter/getter traps):
+		context.currentObserver = observer;
+		callback();
+		context.currentObserver = null;
+	};
+
+	return observer;
+};
+
+export const observe = (callback: VoidFunction) => {
 	// @note: if we've already a callback set, it means that we're inside a nested observer case
 	// We ignore the nested observer by calling it without observer logic modifications
-	// and keep the root observer as the single source of truth for the currentObserverCallback:
-	if (context.currentObserverCallback) {
+	// and keep the root observer as the single source of truth for the currentObserver:
+	if (context.currentObserver) {
 		callback();
 
 		return;
 	}
 
-	// @note: collect observables via the first call
-	// and keep updating the computed value if needed:
-	const track = () => {
-		context.currentObserverCallback = track;
-		callback();
-		context.currentObserverCallback = null;
-	};
-
-	track();
+	createObserver(callback)();
 };
 
 const proxify = (target: Target): Target => {
@@ -165,8 +168,11 @@ export const observable = <Value>(
 	// And consumer side: let counter = observable(0); counter++; Instead of counter.$++
 	*/
 
-	if (context.currentObserverCallback) {
-		throw new Error("`observable` must not be affected inside `observe`");
+	// @todo: test for following condition
+	if (context.currentObserver) {
+		throw new Error(
+			"`observable` value must not be affected inside an `observe` callback"
+		);
 	}
 
 	if (typeof value !== "function") {
@@ -183,5 +189,5 @@ export const observable = <Value>(
 };
 
 setTimeout(() => {
-	console.log(context, callbacks);
+	console.log(context);
 }, 1000);
