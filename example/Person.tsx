@@ -15,6 +15,12 @@ observe(() => {
 	console.log("FirstName", person.$.firstName);
 });
 
+observe(() => {
+	// @todo: should be called if children property is updated
+	// @todo2: person.$ = { firstName: "New", age: 28 } should proxify the affected object
+	console.log("Root", person.$);
+});
+
 export const Person = () => {
 	return (
 		<div>
@@ -37,6 +43,17 @@ export const Person = () => {
 				}}
 			>
 				Reset
+			</button>
+
+			<button
+				onClick={() => {
+					// @todo: should proxify new object in order to be tracked next time !
+					// For example here, clicking on reset breaks random firstname generation if the user tries to generate it after the reset
+					// @ts-ignore
+					person.$ = { plop: false };
+				}}
+			>
+				New property
 			</button>
 		</div>
 	);

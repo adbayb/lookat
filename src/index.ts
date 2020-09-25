@@ -46,7 +46,6 @@ type Target = Record<string, unknown>;
 
 type Context = {
 	currentObserverCallback: Observer | null;
-	preventSubscriptionDuringSideEffect: boolean;
 	observers: WeakMap<Target, Observer[]>;
 	// @todo: remove proxies (needed only to prevent creating multiple instances of proxies)
 	// Might be better and less memory consuming to store an extra private proxy property to check if we've already a proxy
@@ -56,7 +55,6 @@ type Context = {
 
 const context: Context = {
 	currentObserverCallback: null,
-	preventSubscriptionDuringSideEffect: false,
 	observers: new WeakMap(),
 	proxies: new WeakMap(),
 };
@@ -71,29 +69,28 @@ class ObservableHandler<Value extends Record<string, unknown>>
 	implements ProxyHandler<Value> {
 	get(...args: Parameters<NonNullable<ProxyHandler<Value>["get"]>>) {
 		const [target, key] = args;
-		const {
-			currentObserverCallback,
-			preventSubscriptionDuringSideEffect,
-		} = context;
-		// @ts-ignore
-		const value = target[key];
+		const { currentObserverCallback } = context;
+		const objectKey = key.toString();
+		const value = target[objectKey];
 
 		// @section: subscribe
-		// @note: we only attach the observer if observable is retrieved within an observer
-		if (currentObserverCallback && !preventSubscriptionDuringSideEffect) {
-			const objectKey = key.toString();
-
-			console.log(`get->${objectKey}`, target, target[objectKey]);
+		if (currentObserverCallback) {
+			// console.log(`get->${objectKey}`, target, target[objectKey]);
 
 			const objectCallbacks = callbacks.get(target);
+			const propertyCallbacks = objectCallbacks?.[objectKey] || [];
 
-			callbacks.set(target, {
-				...objectCallbacks,
-				[objectKey]: [
-					...(objectCallbacks?.[objectKey] || []),
-					currentObserverCallback,
-				],
-			});
+			if (!propertyCallbacks.includes(currentObserverCallback)) {
+				propertyCallbacks.push(currentObserverCallback);
+				// objectCallbacks[objectKey] = propertyCallbacks;
+
+				callbacks.set(target, {
+					...objectCallbacks,
+					[objectKey]: propertyCallbacks,
+				});
+			}
+		} else {
+			// console.log("OUTSIDE", `get->${objectKey}`);
 		}
 
 		return isObject(value) ? proxify(value) : Reflect.get(...args);
@@ -112,10 +109,7 @@ class ObservableHandler<Value extends Record<string, unknown>>
 		}
 
 		// @section: notify
-		// @note: to avoid infinite loop while triggering external observer side effects during a given observer call
-		context.preventSubscriptionDuringSideEffect = true;
 		observers.forEach((observer) => observer());
-		context.preventSubscriptionDuringSideEffect = false;
 
 		return result;
 	}
@@ -133,9 +127,13 @@ export const observe = (callback: Observer) => {
 
 	// @note: collect observables via the first call
 	// and keep updating the computed value if needed:
-	context.currentObserverCallback = callback;
-	context.currentObserverCallback();
-	context.currentObserverCallback = null;
+	const track = () => {
+		context.currentObserverCallback = track;
+		callback();
+		context.currentObserverCallback = null;
+	};
+
+	track();
 };
 
 const proxify = (target: Target): Target => {

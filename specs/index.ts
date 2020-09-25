@@ -1,35 +1,52 @@
 import { observable } from "../src";
 import { observe } from "../src";
 
-describe("observable", () => {
-	test("should observe side effects", () => {
+const INITIAL_OBSERVE_COUNT = 1;
+
+describe("core", () => {
+	test("should observe update", () => {
 		const counter = observable(0);
 		const callback = jest.fn(() => {
 			counter.$;
 		});
 
 		observe(callback);
-		expect(callback).toHaveBeenCalledTimes(1);
+
+		expect(callback).toHaveBeenCalledTimes(INITIAL_OBSERVE_COUNT);
 		counter.$++;
-		expect(callback).toHaveBeenCalledTimes(2);
+		expect(callback).toHaveBeenCalledTimes(INITIAL_OBSERVE_COUNT + 1);
 	});
 
-	test("should observe and compute derived observable", () => {
-		const value = observable(0);
-		const doubleValue = observable(() => value.$ * 2);
+	test("should observe conditional dependencies", () => {
+		const counter = observable(0);
+		const limit = observable(false);
 		const callback = jest.fn(() => {
-			return doubleValue.$;
+			if (counter.$ >= 2) {
+				limit.$ = true;
+			}
+		});
+		const limitCallback = jest.fn(() => {
+			limit.$;
 		});
 
 		observe(callback);
+		observe(limitCallback);
+
+		counter.$++;
+		expect(limitCallback).toHaveBeenCalledTimes(INITIAL_OBSERVE_COUNT);
+		counter.$++;
+		expect(limitCallback).toHaveBeenCalledTimes(INITIAL_OBSERVE_COUNT + 1);
+	});
+
+	test("should observe derived observable update", () => {
+		const value = observable(0);
+		const doubleValue = observable(() => value.$ * 2);
+
 		expect(doubleValue.$).toBe(0);
-		expect(callback).toHaveReturnedWith(0);
 		value.$++;
 		expect(doubleValue.$).toBe(2);
-		expect(callback).toHaveReturnedWith(2);
 		value.$++;
 		expect(doubleValue.$).toBe(4);
-		expect(callback).toHaveReturnedWith(4);
 	});
 
 	test("should ignore nested observers subscriptions", () => {
@@ -43,38 +60,64 @@ describe("observable", () => {
 		});
 
 		observe(callback);
-		expect(callback).toHaveBeenCalledTimes(1);
+
+		expect(callback).toHaveBeenCalledTimes(INITIAL_OBSERVE_COUNT);
 		state.$++;
-		expect(callback).toHaveBeenCalledTimes(2);
+		expect(callback).toHaveBeenCalledTimes(INITIAL_OBSERVE_COUNT + 1);
 		nestedState.$++;
-		expect(callback).toHaveBeenCalledTimes(3);
+		expect(callback).toHaveBeenCalledTimes(INITIAL_OBSERVE_COUNT + 2);
+	});
+});
+
+describe("object", () => {
+	const person = observable({ firstName: "Ayoub", age: 28 });
+	const handleAgeChange = jest.fn(() => {
+		person.$.age;
+	});
+	const handleFirstNameChange = jest.fn(() => {
+		person.$.firstName;
 	});
 
-	test("should observe nested object property update", () => {
-		const person = observable({ firstName: "Ayoub", age: 28 });
-		const handleAgeChange = jest.fn(() => {
-			person.$.age;
-		});
-		const handleFirstNameChange = jest.fn(() => {
-			person.$.firstName;
-		});
-		const handleObjectChange = jest.fn(() => {
-			person.$;
-		});
+	beforeEach(() => {
+		handleAgeChange.mockClear();
+		handleFirstNameChange.mockClear();
+	});
 
+	test("should observe property updates", () => {
 		observe(handleAgeChange);
 		observe(handleFirstNameChange);
 
 		person.$.age++;
 
-		expect(handleObjectChange).toHaveBeenCalledTimes(1);
-		expect(handleFirstNameChange).toHaveBeenCalledTimes(1);
-		expect(handleAgeChange).toHaveBeenCalledTimes(2);
+		expect(handleFirstNameChange).toHaveBeenCalledTimes(
+			INITIAL_OBSERVE_COUNT
+		);
+		expect(handleAgeChange).toHaveBeenCalledTimes(
+			INITIAL_OBSERVE_COUNT + 1
+		);
 
-		person.$ = { firstName: "Joe", age: 28 };
+		person.$.firstName = "New FirstName";
 
-		expect(handleObjectChange).toHaveBeenCalledTimes(2);
-		expect(handleFirstNameChange).toHaveBeenCalledTimes(2);
-		expect(handleAgeChange).toHaveBeenCalledTimes(2);
+		expect(handleFirstNameChange).toHaveBeenCalledTimes(
+			INITIAL_OBSERVE_COUNT + 1
+		);
+		expect(handleAgeChange).toHaveBeenCalledTimes(
+			INITIAL_OBSERVE_COUNT + 1
+		);
+	});
+
+	test("should observe parent property update", () => {
+		observe(handleAgeChange);
+		observe(handleFirstNameChange);
+
+		// @ts-ignore
+		person.$ = {};
+
+		expect(handleFirstNameChange).toHaveBeenCalledTimes(
+			INITIAL_OBSERVE_COUNT + 1
+		);
+		expect(handleAgeChange).toHaveBeenCalledTimes(
+			INITIAL_OBSERVE_COUNT + 1
+		);
 	});
 });
