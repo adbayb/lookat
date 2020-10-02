@@ -1,10 +1,11 @@
 import * as React from "react";
-import { observable, observe } from "../src";
+import { context, observable, observe } from "../src";
 
 const person = observable({ firstName: "Ayoub", age: 28 });
 
 setInterval(() => {
 	person.$.age++;
+	console.warn(context);
 }, 1000);
 
 observe(() => {
@@ -15,11 +16,11 @@ observe(() => {
 	console.log("FirstName", person.$.firstName);
 });
 
-// observe(() => {
-// 	// @todo: should be called if children property is updated
-// 	// @todo2: person.$ = { firstName: "New", age: 28 } should proxify the affected object
-// 	console.log("Root", person.$);
-// });
+observe(() => {
+	// @todo: should be called if children property is updated
+	// @todo2: person.$ = { firstName: "New", age: 28 } should proxify the affected object
+	console.log("Root", person.$);
+});
 
 export const Person = () => {
 	return (

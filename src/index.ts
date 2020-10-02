@@ -38,22 +38,17 @@ observe(() => {
 
 export type Observable<Value> = { $: Value };
 
-// Observer should not return a function (no closure ! It can lead to untrack items since we don't call the return function)
-// @todo: typing + runtime warning
-type Observer = VoidFunction;
+export type Observer = VoidFunction;
 
 type Target = Record<string, unknown>;
 
 type Context = {
 	currentObserver: Observer | null;
 	observers: WeakMap<Target, Record<string, Observer[]>>;
-	// @todo: remove proxies (needed only to prevent creating multiple instances of proxies)
-	// Might be better and less memory consuming to store an extra private proxy property to check if we've already a proxy
-	// @see: https://stackoverflow.com/questions/41299642/how-to-use-javascript-proxy-for-nested-objects
 	proxies: WeakMap<Target, Target>;
 };
 
-const context: Context = {
+export const context: Context = {
 	currentObserver: null,
 	observers: new WeakMap(),
 	proxies: new WeakMap(),
@@ -66,15 +61,15 @@ const isObject = (value: unknown): value is Record<string, unknown> => {
 class ObservableHandler<Value extends Record<string, unknown>>
 	implements ProxyHandler<Value> {
 	get(...args: Parameters<NonNullable<ProxyHandler<Value>["get"]>>) {
-		const [target, key] = args;
 		const { currentObserver } = context;
-		const objectKey = key.toString();
-		const value = target[objectKey];
+		const target = args[0];
+		const key = args[1] as string;
+		const value = target[key];
 
 		// @section: subscribe
 		if (currentObserver) {
-			// console.log(`get->${objectKey}`, target, target[objectKey]);
-			const rootCallbacks = context.observers.get(target) || {};
+			// console.log(`get->${key}`, target, target[key]);
+			const callbacks = context.observers.get(target) || {};
 			// @note: we map current observer to all traversed properties (not only the last accessed property)
 			// to allow nested observers to be notified in case of parent properties reset.
 			// For example, if we have following observable shape: person = { firstName: "Ayoub", age: 28 }
@@ -82,13 +77,13 @@ class ObservableHandler<Value extends Record<string, unknown>>
 			// We expect that observers associated to "firstName" and "age" property are called
 			// Mapping also the observers to $ parent property allows to call those observers and create new proxy around the empty reset object
 			// to track future updates:
-			const propertyCallbacks = rootCallbacks[objectKey] || [];
+			const propertyCallbacks = callbacks[key] || [];
 
 			if (!propertyCallbacks.includes(currentObserver)) {
 				propertyCallbacks.push(currentObserver);
-				rootCallbacks[objectKey] = propertyCallbacks;
+				callbacks[key] = propertyCallbacks;
 
-				context.observers.set(target, rootCallbacks);
+				context.observers.set(target, callbacks);
 			}
 		}
 
@@ -96,11 +91,12 @@ class ObservableHandler<Value extends Record<string, unknown>>
 	}
 
 	set(...args: Parameters<NonNullable<ProxyHandler<Value>["set"]>>) {
-		const [target, key] = args;
+		const target = args[0];
+		const key = args[1] as string;
 		// @note: we mutate before notifying to let observers get mutated value
 		const result = Reflect.set(...args);
-		const observers = context.observers.get(target)?.[key.toString()];
-		// console.warn(`set->${key.toString()}`, target, context);
+		const observers = context.observers.get(target)?.[key];
+		// console.warn(`set->${key}`, target, context);
 
 		if (!observers) {
 			return result;
@@ -140,10 +136,10 @@ export const observe = (callback: VoidFunction) => {
 };
 
 const proxify = (target: Target): Target => {
-	const ctxProxy = context.proxies.get(target);
+	const storedProxy = context.proxies.get(target);
 
-	if (ctxProxy) {
-		return ctxProxy;
+	if (storedProxy) {
+		return storedProxy;
 	}
 
 	const proxy = new Proxy(target, new ObservableHandler());
@@ -187,7 +183,3 @@ export const observable = <Value>(
 
 	return computedObservable;
 };
-
-setTimeout(() => {
-	console.log(context);
-}, 1000);
