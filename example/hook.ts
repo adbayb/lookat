@@ -4,6 +4,7 @@ import { Observable, observe } from "../src";
 export const useObservable = <Value extends unknown>(
 	observableValue: Observable<Value>
 ) => {
+	// @todo: consume `observable` here and use useMemo to memoize its value
 	const state = React.useState(observableValue.$);
 
 	React.useEffect(() => {

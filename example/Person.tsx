@@ -1,5 +1,6 @@
 import * as React from "react";
 import { context, observable, observe } from "../src";
+import { useObservable } from "./hook";
 
 const person = observable({ firstName: "Ayoub", age: 28 });
 
@@ -23,38 +24,45 @@ observe(() => {
 });
 
 export const Person = () => {
+	const state = useObservable(person);
+
 	return (
 		<div
 			style={{ display: "grid", gridTemplateColumns: "1fr", gridGap: 8 }}
 		>
-			<span>👋</span>
+			<div>👋 {JSON.stringify(state)}</div>
 			<button
 				onClick={() => {
 					const value = Math.random();
 
-					person.$.firstName = value.toString();
+					state.$.firstName = value.toString();
 				}}
 			>
-				Random FirstName
+				Update first name - TO FIX WITH HOOK
 			</button>
 			<button
 				onClick={() => {
-					// @todo: to test notifier reliability, check really deep object reset (2 nested levels for examples). For example: person.$.parent.father = {}
-					// @ts-ignore
-					person.$ = {};
+					state.$.age = 0;
 				}}
 			>
-				Reset
+				Reset age - TO FIX WITH HOOK
+			</button>
+			<button
+				onClick={() => {
+					state.$ = { firstName: "Unknown", age: 99 };
+				}}
+			>
+				Change person identity (new object)
 			</button>
 			<button
 				onClick={() => {
 					// @todo: should proxify new object in order to be tracked next time !
 					// For example here, clicking on reset breaks random firstname generation if the user tries to generate it after the reset
 					// @ts-ignore
-					person.$ = { plop: false };
+					state.$ = { plop: false };
 				}}
 			>
-				New property
+				Alter shape (new object with new shape)
 			</button>
 		</div>
 	);

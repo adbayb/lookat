@@ -1,41 +1,3 @@
-/*
-Observable API:
-const counter = observable(0); // returns counter.$ ($ is the reactive value accessor making the reactivity explicit in the naming). To mutate, use `counter.$++` for example
-const person = observable({ firstname: "Ayoub", age: 28 }); // returns counter.$.age...
-
-Observe API:
-const voidValue = observe(() => console.log(counter * 2)); // side effects
-const isPair = observe(() => counter % 2 === 0); // computed reactive value => returns observable value
-observe(() => {
-	console.log(isPair.$)
-})
-
-Utilities API:
-unwrap(isPair) // returns raw value of an observable
-*/
-
-/*
-TODO:
-
-- Enable more granular proxy for objects (per properties)
-- Enable Array/Map/WeakMap/Set observables (+ add tests)
-- Do not call observers if impacted value is not modified (check inside the setter trap)
-- Optimize Proxy wrapping => do not use observe api but instead observable api to define derived observables as well:
-const counter = observable(0)
-const counterSquare = observable(counter.$ * 2)
-
-- Optimize same observer calls if the side effect relies on computed observables:
-const counter = observable(0);
-const counterSquare = observe(() => counter.$ * 2);
-observe(() => {
-	console.log("Counter Quatro = ", counter.$, " ", counterSquare.$);
-});
-// => Currently, it's called two times since the observer relies on two observables but it could be improved with some predicates to be called once
-
-- Performance/Memory benchmark
-- Readme + Hosted documentation
-*/
-
 export type Observable<Value> = { $: Value };
 
 export type Observer = VoidFunction;
@@ -65,10 +27,10 @@ class ObservableHandler<Value extends Record<string, unknown>>
 		const target = args[0];
 		const key = args[1] as string;
 		const value = target[key];
+		// console.log(`get->${key}`, target, target[key]);
 
-		// @section: subscribe
+		// @section: observer subscriptions
 		if (currentObserver) {
-			// console.log(`get->${key}`, target, target[key]);
 			const callbacks = context.observers.get(target) || {};
 			// @note: we map current observer to all traversed properties (not only the last accessed property)
 			// to allow nested observers to be notified in case of parent properties reset.
