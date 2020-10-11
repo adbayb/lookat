@@ -107,9 +107,6 @@ describe("object", () => {
 	});
 
 	// @note: following test test if parent updates impacts its children (capture phase)
-	// @todo?: we should? allow the bubble phase => eg. if a child property update is updated, parent should be warned
-	// But needs a clear definition of update action. Since if we update a child property, the parent object updates its shape but the parent reference is not altered
-	// So if we go with the bubble phase, the update actions is based upon shape value update instead of javascript reference update definition
 	test("should observe cascade property updates (capture phase)", () => {
 		observe(handleAgeChange);
 		observe(handleFirstNameChange);

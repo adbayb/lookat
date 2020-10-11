@@ -27,6 +27,7 @@ class ObservableHandler<Value extends Record<string, unknown>>
 		const target = args[0];
 		const key = args[1] as string;
 		const value = target[key];
+
 		// console.log(`get->${key}`, target, target[key]);
 
 		// @section: observer subscriptions
@@ -35,10 +36,9 @@ class ObservableHandler<Value extends Record<string, unknown>>
 			// @note: we map current observer to all traversed properties (not only the last accessed property)
 			// to allow nested observers to be notified in case of parent properties reset.
 			// For example, if we have following observable shape: person = { firstName: "Ayoub", age: 28 }
-			// If we reset its nested values via person.$ = {}
-			// We expect that observers associated to "firstName" and "age" property are called
-			// Mapping also the observers to $ parent property allows to call those observers and create new proxy around the empty reset object
-			// to track future updates:
+			// If we reset its nested values via person.$ = {}, We expect that observers associated to "firstName" and "age" property are called.
+			// Mapping also their observers to the $ parent property allows to call their associated `observe` callbacks and
+			// recompute their new observers dependency list to track future updates:
 			const propertyCallbacks = callbacks[key] || [];
 
 			if (!propertyCallbacks.includes(currentObserver)) {
@@ -58,14 +58,13 @@ class ObservableHandler<Value extends Record<string, unknown>>
 		// @note: we mutate before notifying to let observers get mutated value
 		const result = Reflect.set(...args);
 		const observers = context.observers.get(target)?.[key];
-		// console.warn(`set->${key}`, target, context);
 
-		if (!observers) {
-			return result;
-		}
+		// console.warn(`set->${key}`, target, context.observers);
 
 		// @section: notify
-		observers.forEach((observer) => observer());
+		if (observers) {
+			observers.forEach((observer) => observer());
+		}
 
 		return result;
 	}

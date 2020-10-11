@@ -1,6 +1,6 @@
 import * as React from "react";
 import { observable, observe } from "../src";
-import { useObservable } from "./hook";
+import { lookAt } from "./react";
 
 const counter = observable(0);
 const derivedCounter = observable(() => counter.$ * 2);
@@ -20,12 +20,10 @@ observe(() => {
 	console.log("Computed", derivedCounter.$);
 });
 
-export const Counter = () => {
-	const value = useObservable(counter);
-
+export const Counter = lookAt(function Counter() {
 	return (
 		<div>
-			<span>Value: {value.$}</span>
+			<span>Value: {counter.$}</span>
 			<div
 				style={{
 					marginTop: 8,
@@ -34,10 +32,10 @@ export const Counter = () => {
 					gridTemplateColumns: "max-content max-content auto",
 				}}
 			>
-				<button onClick={() => value.$++}>Increment</button>
-				<button onClick={() => value.$--}>Decrement</button>
-				<button onClick={() => (value.$ = 0)}>Reset</button>
+				<button onClick={() => counter.$++}>Increment</button>
+				<button onClick={() => counter.$--}>Decrement</button>
+				<button onClick={() => (counter.$ = 0)}>Reset</button>
 			</div>
 		</div>
 	);
-};
+});
