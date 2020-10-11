@@ -70,20 +70,11 @@ describe("core", () => {
 });
 
 describe("object", () => {
-	const person = observable({ firstName: "Ayoub", age: 28 });
-	const handleAgeChange = jest.fn(() => {
-		person.$.age;
-	});
-	const handleFirstNameChange = jest.fn(() => {
-		person.$.firstName;
-	});
-
-	beforeEach(() => {
-		handleAgeChange.mockClear();
-		handleFirstNameChange.mockClear();
-	});
-
 	test("should observe property updates", () => {
+		const person = observable({ firstName: "Ayoub", age: 28 });
+		const handleAgeChange = jest.fn(() => person.$.age);
+		const handleFirstNameChange = jest.fn(() => person.$.firstName);
+
 		observe(handleAgeChange);
 		observe(handleFirstNameChange);
 
@@ -107,7 +98,11 @@ describe("object", () => {
 	});
 
 	// @note: following test test if parent updates impacts its children (capture phase)
-	test("should observe cascade property updates (capture phase)", () => {
+	test("should recompute observable dependencies on the fly given parent property reset", () => {
+		const person = observable({ firstName: "Ayoub", age: 28 });
+		const handleAgeChange = jest.fn(() => person.$.age);
+		const handleFirstNameChange = jest.fn(() => person.$.firstName);
+
 		observe(handleAgeChange);
 		observe(handleFirstNameChange);
 
@@ -121,6 +116,31 @@ describe("object", () => {
 		);
 		expect(handleAgeChange).toHaveBeenCalledTimes(
 			INITIAL_OBSERVE_COUNT + 1
+		);
+	});
+
+	test("should not observe properties which are not traversed within `observe` callback", () => {
+		const state = observable({ hasChild: { hasGrandChild: true } });
+		const storedReference = state.$.hasChild;
+		const handleChange = jest.fn(() => {
+			state.$.hasChild.hasGrandChild;
+		});
+		const handleChangeWithStoredReference = jest.fn(() => {
+			storedReference.hasGrandChild;
+		});
+
+		observe(handleChange);
+		observe(handleChangeWithStoredReference);
+
+		// @note: we create a new object. state.$.hasChild has a new reference.
+		// Then handleChangeWithStoredReference should not be notified since it relies on the old hasChild reference
+		state.$.hasChild = { hasGrandChild: false };
+
+		// @todo: should be fine (working as expected in a non test environment)
+		// Check why jest handles it differently
+		expect(handleChange).toHaveBeenCalledTimes(INITIAL_OBSERVE_COUNT + 1);
+		expect(handleChangeWithStoredReference).toHaveBeenCalledTimes(
+			INITIAL_OBSERVE_COUNT
 		);
 	});
 });

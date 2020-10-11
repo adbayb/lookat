@@ -33,27 +33,6 @@ observe(() => {
 	console.log("Root", person.$);
 });
 
-/**
- * API limitations and caveats with object like observable:
- *
- * 👉 Updates are always notified from top to bottom. Updating a child property
- * won't notify its parent observers. But a parent update (such a new reference through object affectation)
- * will notify its child property observers. And it's quite natural and aligned with JS runtime:
- * => value and reference are managed from top to bottom: a child cannot update its parent reference.
- *
- * 👉 Parent update (eg. new object affectation) will notify its child observers if and only if all accessors
- * to reach the targetted child property are specified inside the `observe` callback:
- *
- * ❌	const state = person.$
- * ❌	observe(() => { state.firstName })
- * ❌	person.$ = { firstName: "New" }
- * ❌	// The observe callback won't be called
- *
- * ✔️	observe(() => { person.$.firstName })
- * ✔️	person.$ = { firstName: "New" }
- * ✔️	// The observe callback will be called
- */
-
 export const Person = lookAt(function Person() {
 	return (
 		<div

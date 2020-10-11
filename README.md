@@ -32,7 +32,7 @@ unwrap(isPair) // returns raw value of an observable
 
 -   Optimize same observer calls if the side effect relies on computed observables:
     const counter = observable(0);
-    const counterSquare = observe(() => counter.$ * 2);
+    const counterSquare = observe(() => counter.$2);
 observe(() => {
 	console.log("Counter Quatro = ", counter.$, " ", counterSquare.\$);
     });
@@ -44,3 +44,19 @@ observe(() => {
 ## Notes
 
 ### Direct access via counter instead of counter.\$ and non reactivity inside observe callback
+
+### API limitations and caveats with object like observable:
+
+👉 Updates are always notified from top to bottom. Updating a child property won't notify its parent observers. But a parent update (such a new reference through object affectation) will notify its child property observers. And it's quite natural and aligned with JS runtime:
+=> value and reference are managed from top to bottom: a child cannot update its parent reference.
+
+👉 Parent update (eg. new object affectation) will notify its child observers if and only if all accessors to reach the targetted child property are specified inside the `observe` callback:
+
+❌ const state = person.$
+❌	observe(() => { state.firstName })
+❌	person.$ = { firstName: "New" }
+❌ // The observe callback won't be called
+
+✔️ observe(() => { person.$.firstName })
+✔️	person.$ = { firstName: "New" }
+✔️ // The observe callback will be called
