@@ -144,3 +144,37 @@ describe("object", () => {
 		);
 	});
 });
+
+describe("array", () => {
+	test("should observe array reference update and not observe mutable api (push)", () => {
+		const list = observable([1, 2, 3]);
+		const handleChange = jest.fn(() => {
+			list.$;
+		});
+
+		observe(handleChange);
+
+		list.$ = [4, 5];
+		expect(handleChange).toHaveBeenCalledTimes(INITIAL_OBSERVE_COUNT + 1);
+
+		list.$.push(6);
+		// @note: no reference change for `list.$` so the associated observer won't be called
+		// even if the array content was updated by the addition of one value.
+		expect(handleChange).toHaveBeenCalledTimes(INITIAL_OBSERVE_COUNT + 1);
+	});
+
+	test("should loop array given a new item pushed", () => {
+		// @todo: map...
+		const list = observable([1, 2, 3]);
+		const handleChange = jest.fn(() => {
+			list.$.forEach((item) => item);
+		});
+
+		observe(handleChange);
+
+		list.$.push(4);
+		expect(handleChange).toHaveBeenCalledTimes(INITIAL_OBSERVE_COUNT + 1);
+	});
+
+	// @todo: other api test like slice...
+});
