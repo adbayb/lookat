@@ -1,3 +1,4 @@
+/* eslint-disable no-prototype-builtins */
 export type Observable<Value> = { $: Value };
 
 export type Observer = VoidFunction;
@@ -20,6 +21,14 @@ const isObject = (value: unknown): value is Record<string, unknown> => {
 	return typeof value === "object" && value !== null;
 };
 
+const isNativeFunction = (target: Record<string, unknown>, key: string) => {
+	const isNativePropertyKey =
+		Object.prototype.hasOwnProperty(key) ||
+		Array.prototype.hasOwnProperty(key);
+
+	return isNativePropertyKey && typeof target[key] === "function";
+};
+
 class ObservableHandler<Value extends Record<string, unknown>>
 	implements ProxyHandler<Value> {
 	get(...args: Parameters<NonNullable<ProxyHandler<Value>["get"]>>) {
@@ -31,7 +40,7 @@ class ObservableHandler<Value extends Record<string, unknown>>
 		// console.log(`get->${key}`, target, target[key]);
 
 		// @section: observer subscriptions
-		if (currentObserver) {
+		if (currentObserver && !isNativeFunction(target, key)) {
 			const callbacks = context.observers.get(target) || {};
 			// @note: we map current observer to all traversed properties (not only the last accessed property)
 			// to allow nested observers to be notified in case of parent properties reset.
@@ -39,14 +48,7 @@ class ObservableHandler<Value extends Record<string, unknown>>
 			// If we reset its nested values via person.$ = {}, We expect that observers associated to "firstName" and "age" property are called.
 			// Mapping also their observers to the $ parent property allows to call their associated `observe` callbacks and
 			// recompute their new observers dependency list to track future updates:
-			// @note: callbacks.hasOwnProperty(key) to avoid getting value from the prototype chain. In fact, callbacks is an Object and
-			// if the current key is the same as one of its Object instance (for example `constructor`), relying only with `callbacks[key]`
-			// will assign the native `constructor` method of callbacks to the `propertyCallbacks` variable.
-			// By checking if `constructor` is the own property of `callbacks` (eg. not inheriting it), we target
-			// the property that was added by the proxy manager and not the one from the parent Object instance:
-			const propertyCallbacks =
-				// eslint-disable-next-line no-prototype-builtins
-				(callbacks.hasOwnProperty(key) && callbacks[key]) || [];
+			const propertyCallbacks = callbacks[key] || [];
 
 			if (!propertyCallbacks.includes(currentObserver)) {
 				propertyCallbacks.push(currentObserver);
