@@ -1,4 +1,4 @@
-import { FunctionComponent, createElement, useEffect, useState } from "react";
+import { FunctionComponent, ReactElement, useEffect, useState } from "react";
 import { Observable, observe } from "../src";
 
 const useForceUpdate = () => {
@@ -9,23 +9,22 @@ const useForceUpdate = () => {
 
 export const lookAt = (MyComponent: FunctionComponent) => {
 	return function LookAt(props: Record<string, unknown>) {
-		const forceUpdate = useForceUpdate();
+		const [element, setElement] = useState<ReactElement | null>(() => {
+			let instance: ReactElement | null = null;
 
-		useEffect(() => {
 			observe(() => {
-				// @note: It's necessary to create a temporary new component instance each time the observer is called to allow tracking dependencies
-				// Using setState(<Component {...props} />) to avoid multiple component logic call won't allow tracking dependencies
-				// since <Component {...props} /> is transpiled to createElement(MyComponent, props)
-				// The createElement receives the functional component `MyComponent` as argument
-				// but the function is not yet called (eg. MyComponent(props)) until the next render tick (after useEffect)
-				// @todo: what about logic inside a component constructor (like fetching data?) => we'll side effects since we call component 2 times
-				MyComponent(props);
-				forceUpdate();
-			});
-			// eslint-disable-next-line react-hooks/exhaustive-deps
-		}, []);
+				// @todo: manage forwardRef (second arg)
+				instance = MyComponent(props);
 
-		return createElement(MyComponent, props);
+				if (typeof setElement === "function") {
+					setElement(instance);
+				}
+			});
+
+			return instance;
+		});
+
+		return element;
 	};
 };
 

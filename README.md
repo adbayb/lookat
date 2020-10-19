@@ -23,13 +23,10 @@ unwrap(isPair) // returns raw value of an observable
 
 ## TODO
 
--   Enable more granular proxy for objects (per properties)
--   Enable Array/Map/WeakMap/Set observables (+ add tests)
--   Do not call observers if impacted value is not modified (check inside the setter trap)
--   Optimize Proxy wrapping => do not use observe api but instead observable api to define derived observables as well:
-    const counter = observable(0)
-    const counterSquare = observable(counter.\$ \* 2)
-
+-   [x] Enable more granular proxy for objects (per properties)
+-   [ ] Enable Array/Map/WeakMap/Set observables (+ add tests)
+-   [ ] Enable delete operator and other missing trap operators
+-   [ ] Do not call observers if impacted value is not modified (check inside the setter trap)
 -   Optimize same observer calls if the side effect relies on computed observables:
     const counter = observable(0);
     const counterSquare = observe(() => counter.$2);
