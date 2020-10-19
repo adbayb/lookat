@@ -75,6 +75,26 @@ class ObservableHandler<Value extends Record<string, unknown>>
 
 		return result;
 	}
+
+	deleteProperty(
+		...args: Parameters<NonNullable<ProxyHandler<Value>["deleteProperty"]>>
+	) {
+		const target = args[0];
+		const key = args[1] as string;
+		const result = Reflect.deleteProperty(...args);
+		const targetObservers = context.observers.get(target);
+
+		if (targetObservers) {
+			const observers = targetObservers?.[key];
+
+			if (observers) {
+				observers.forEach((observer) => observer());
+				delete targetObservers[key];
+			}
+		}
+
+		return result;
+	}
 }
 
 const createObserver = (callback: VoidFunction): Observer => {

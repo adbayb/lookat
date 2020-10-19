@@ -176,5 +176,17 @@ describe("array", () => {
 		expect(handleChange).toHaveBeenCalledTimes(INITIAL_OBSERVE_COUNT + 1);
 	});
 
+	test("should observe delete operation", () => {
+		const list = observable([1, 2, 3]);
+		const handleChange = jest.fn(() => {
+			list.$.forEach((item) => item);
+		});
+
+		observe(handleChange);
+
+		delete list.$[0];
+		expect(handleChange).toHaveBeenCalledTimes(INITIAL_OBSERVE_COUNT + 1);
+	});
+
 	// @todo: other api test like slice...
 });

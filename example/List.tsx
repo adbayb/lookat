@@ -37,24 +37,31 @@ export const List = lookAt(() => {
 				</button>
 				<button
 					onClick={() => {
+						list.$ = ["3", "4"];
+					}}
+				>
+					Change
+				</button>
+				<button
+					onClick={() => {
 						list.$.pop();
 					}}
 				>
-					Remove
+					Remove (last)
 				</button>
 				<button
 					onClick={() => {
 						list.$[0] = "Mamamiya";
 					}}
 				>
-					Update
+					Update (i=0)
 				</button>
 				<button
 					onClick={() => {
-						list.$ = ["3", "4"];
+						delete list.$[0];
 					}}
 				>
-					Change
+					Delete (i=0)
 				</button>
 			</div>
 			<div
