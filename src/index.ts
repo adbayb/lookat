@@ -143,24 +143,9 @@ const createObservable = <Value>(value: Value): Observable<Value> => {
 	return proxify({ $: value }) as Observable<Value>;
 };
 
-// @todo: object, array, ...
 export const observable = <Value>(
 	value: Value | (() => Value)
 ): Observable<Value> => {
-	/*
-	// @todo: check feasability of:
-	const proxifiedObj = new Proxy({ $: value }, new ObservableHandler());
-	return proxifiedObj.$
-	// And consumer side: let counter = observable(0); counter++; Instead of counter.$++
-	*/
-
-	// @todo: test for following condition
-	if (context.currentObserver) {
-		throw new Error(
-			"`observable` value must not be affected inside an `observe` callback"
-		);
-	}
-
 	if (typeof value !== "function") {
 		return createObservable(value);
 	}

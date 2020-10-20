@@ -10,14 +10,11 @@ setInterval(() => {
 }, 1000);
 
 observe(() => {
-	observe(() => {
-		counter.$ * 4;
-	});
-	console.log("Nested", counter.$);
+	console.log("Counter:", counter.$);
 });
 
 observe(() => {
-	console.log("Computed", derivedCounter.$);
+	console.log("Computed:", derivedCounter.$);
 });
 
 export const Counter = lookAt(function Counter() {

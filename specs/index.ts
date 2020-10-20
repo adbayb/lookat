@@ -98,7 +98,7 @@ describe("object", () => {
 	});
 
 	// @note: following test test if parent updates impacts its children (capture phase)
-	test("should recompute observable dependencies on the fly given parent property reset", () => {
+	test("should propage change from parent to children", () => {
 		const person = observable({ firstName: "Ayoub", age: 28 });
 		const handleAgeChange = jest.fn(() => person.$.age);
 		const handleFirstNameChange = jest.fn(() => person.$.firstName);
