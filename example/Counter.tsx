@@ -1,23 +1,28 @@
 import * as React from "react";
-import { observable, observe } from "../src";
-import { lookAt } from "./react";
+// import { observable, observe } from "../src";
+import { useObservable, useObserver } from "./react";
 
-const counter = observable(0);
-const derivedCounter = observable(() => counter.$ * 2);
+// setInterval(() => {
+// 	counter.$++;
+// }, 1000);
 
-setInterval(() => {
-	counter.$++;
-}, 1000);
+export const Counter = () => {
+	const counter = useObservable(0);
+	const derivedCounter = useObservable(() => counter.$ * 2);
 
-observe(() => {
-	console.log("Counter:", counter.$);
-});
+	console.warn("Render");
 
-observe(() => {
-	console.log("Computed:", derivedCounter.$);
-});
+	useObserver(() => {
+		// @tofix: fix observe primitive to avoid calling observer if the next value doesn't change
+		console.log("Source:", counter.$);
+		// @tofix: adding another observable causes double calls
+		// console.log("Computed:", derivedCounter.$);
+	});
 
-export const Counter = lookAt(function Counter() {
+	useObserver(() => {
+		console.log("Computed:", derivedCounter.$);
+	});
+
 	return (
 		<div>
 			<span>Value: {counter.$}</span>
@@ -35,4 +40,4 @@ export const Counter = lookAt(function Counter() {
 			</div>
 		</div>
 	);
-});
+};

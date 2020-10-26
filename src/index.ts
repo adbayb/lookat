@@ -9,12 +9,14 @@ type Context = {
 	currentObserver: Observer | null;
 	observers: WeakMap<Target, Record<string, Observer[]>>;
 	proxies: WeakMap<Target, Target>;
+	// globalObserver: Observer | null;
 };
 
 export const context: Context = {
 	currentObserver: null,
 	observers: new WeakMap(),
 	proxies: new WeakMap(),
+	// globalObserver: null,
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> => {
@@ -31,6 +33,12 @@ const isNativeFunction = (target: Record<string, unknown>, key: string) => {
 
 class ObservableHandler<Value extends Record<string, unknown>>
 	implements ProxyHandler<Value> {
+	globalObserver?: Observer;
+
+	constructor(observer?: Observer) {
+		this.globalObserver = observer;
+	}
+
 	get(...args: Parameters<NonNullable<ProxyHandler<Value>["get"]>>) {
 		const { currentObserver } = context;
 		const target = args[0];
@@ -58,21 +66,31 @@ class ObservableHandler<Value extends Record<string, unknown>>
 			}
 		}
 
-		return isObject(value) ? proxify(value) : Reflect.get(...args);
+		return isObject(value)
+			? proxify(value, this.globalObserver)
+			: Reflect.get(...args);
 	}
 
 	set(...args: Parameters<NonNullable<ProxyHandler<Value>["set"]>>) {
 		const target = args[0];
 		const key = args[1] as string;
+		const oldValue = target[key];
 		// @note: we mutate before notifying to let observers get mutated value
 		const result = Reflect.set(...args);
+		const needsUpdate = oldValue !== target[key];
 		const observers = context.observers.get(target)?.[key];
 
-		// console.warn(`set->${key}`, target, context.observers);
+		// console.warn(`set->${key}`, ...args);
 
 		// @section: notify
-		if (observers) {
-			observers.forEach((observer) => observer());
+		if (needsUpdate) {
+			if (this.globalObserver) {
+				this.globalObserver();
+			}
+
+			if (observers) {
+				observers.forEach((observer) => observer());
+			}
 		}
 
 		return result;
@@ -125,32 +143,36 @@ export const observe = (callback: VoidFunction) => {
 	createObserver(callback)();
 };
 
-const proxify = (target: Target): Target => {
+const proxify = (target: Target, globalObserver?: Observer): Target => {
 	const storedProxy = context.proxies.get(target);
 
 	if (storedProxy) {
 		return storedProxy;
 	}
 
-	const proxy = new Proxy(target, new ObservableHandler());
+	const proxy = new Proxy(target, new ObservableHandler(globalObserver));
 
 	context.proxies.set(target, proxy);
 
 	return proxy;
 };
 
-const createObservable = <Value>(value: Value): Observable<Value> => {
-	return proxify({ $: value }) as Observable<Value>;
+const createObservable = <Value>(value: Value, globalObserver?: Observer) => {
+	return proxify({ $: value }, globalObserver) as Observable<Value>;
 };
 
 export const observable = <Value>(
-	value: Value | (() => Value)
+	value: Value | (() => Value),
+	globalObserver?: Observer
 ): Observable<Value> => {
 	if (typeof value !== "function") {
-		return createObservable(value);
+		return createObservable(value, globalObserver);
 	}
 
-	const computedObservable: Observable<Value> = createObservable(undefined!);
+	const computedObservable: Observable<Value> = createObservable(
+		undefined!,
+		globalObserver
+	);
 
 	observe(() => {
 		computedObservable.$ = (value as () => Value)();

@@ -1,10 +1,16 @@
-import { FunctionComponent, ReactElement, useEffect, useState } from "react";
-import { Observable, observe } from "../src";
+import {
+	FunctionComponent,
+	ReactElement,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
+import { Observer, observable, observe } from "../src";
 
 const useForceUpdate = () => {
-	const [, forceUpdate] = useState<Record<string, unknown>>();
+	const [, forceUpdate] = useState(0);
 
-	return () => forceUpdate({});
+	return () => forceUpdate((x) => x + 1);
 };
 
 export const lookAt = (MyComponent: FunctionComponent) => {
@@ -31,16 +37,17 @@ export const lookAt = (MyComponent: FunctionComponent) => {
 // @note: not useful for non primitive observable. Since we track only the parent update (via the root property .$)
 // For example, if we have a property `child` (observable.$.child) and the child property is updated, the following
 // hook won't trigger a rerender:
-export const useLookAt = <Value extends unknown>(
-	observable: Observable<Value>
-) => {
+export const useObservable = <Value extends unknown>(value: Value) => {
 	const forceUpdate = useForceUpdate();
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	const observedValue = useMemo(() => observable(value, forceUpdate), []);
 
+	return observedValue;
+};
+
+export const useObserver = (observer: Observer) => {
 	useEffect(() => {
-		observe(() => {
-			observable.$;
-			forceUpdate();
-		});
+		observe(observer);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 };
