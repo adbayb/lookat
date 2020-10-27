@@ -9,14 +9,12 @@ type Context = {
 	currentObserver: Observer | null;
 	observers: WeakMap<Target, Record<string, Observer[]>>;
 	proxies: WeakMap<Target, Target>;
-	// globalObserver: Observer | null;
 };
 
 export const context: Context = {
 	currentObserver: null,
 	observers: new WeakMap(),
 	proxies: new WeakMap(),
-	// globalObserver: null,
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> => {
@@ -103,6 +101,10 @@ class ObservableHandler<Value extends Record<string, unknown>>
 		const key = args[1] as string;
 		const result = Reflect.deleteProperty(...args);
 		const targetObservers = context.observers.get(target);
+
+		if (this.globalObserver) {
+			this.globalObserver();
+		}
 
 		if (targetObservers) {
 			const observers = targetObservers?.[key];

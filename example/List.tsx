@@ -1,23 +1,24 @@
 import React from "react";
-import { context, observable, observe } from "../src";
-import { lookAt } from "./react";
+import { useObservable, useObserver } from "./react";
 
-const list = observable(["First", "Second"]);
+export const List = () => {
+	const list = useObservable(["First", "Second"]);
 
-observe(() => {
-	console.log("Updated0", list.$, context);
-});
+	useObserver(() => {
+		console.log("Updated0", list.$);
+	});
 
-observe(() => {
-	console.log("Updated1", list.$[0], context);
-});
+	useObserver(() => {
+		console.log("Updated1", list.$[0]);
+	});
 
-observe(() => {
-	console.log("Updated2", list.$.join("/"), context);
-});
+	useObserver(() => {
+		console.log("Updated2", list.$.join("/"));
+	});
 
-export const List = lookAt(() => {
-	console.warn("Render");
+	useObserver(() => {
+		list.$.forEach((item) => console.log("Updated3", item));
+	});
 
 	return (
 		<>
@@ -90,4 +91,4 @@ export const List = lookAt(() => {
 			</div>
 		</>
 	);
-});
+};

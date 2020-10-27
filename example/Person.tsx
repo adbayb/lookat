@@ -1,39 +1,41 @@
-import * as React from "react";
-import { observable, observe } from "../src";
-import { lookAt } from "./react";
+import React, { useEffect } from "react";
+import { useObservable, useObserver } from "./react";
 
-const person = observable({ firstName: "Ayoub", age: 28 });
+export const Person = () => {
+	const person = useObservable({ firstName: "Ayoub", age: 28 });
 
-setInterval(() => {
-	person.$.age++;
-}, 1000);
+	useEffect(() => {
+		setInterval(() => {
+			person.$.age++;
+		}, 1000);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
 
-observe(() => {
-	console.log("Age", person.$.age);
-});
+	useObserver(() => {
+		console.log("Age", person.$.age);
+	});
 
-observe(() => {
-	console.log("FirstName", person.$.firstName);
-});
+	useObserver(() => {
+		console.log("FirstName", person.$.firstName);
+	});
 
-observe(() => {
-	/* 
-		@note: For now, behavior limitation => not possible to call parent property if children property is updated
-		since it implies that all properties (from the parent root to the targeted children) are accessed inside the observer callback
-		@todo: let parent be notified from child change 
-		And check if it works with:
+	useObserver(() => {
+		/* 
+			@note: For now, behavior limitation => not possible to call parent property if children property is updated
+			since it implies that all properties (from the parent root to the targeted children) are accessed inside the observer callback
+			@todo: let parent be notified from child change 
+			And check if it works with:
+	
+			const accessedFromOutside = person.$
+	
+			observe(() => {
+				accessedFromOutside;
+			})
+		*/
+		// @todo: person.$ = { firstName: "New", age: 28 } should proxify the affected object
+		console.log("Root", person.$);
+	});
 
-		const accessedFromOutside = person.$
-
-		observe(() => {
-			accessedFromOutside;
-		})
-	*/
-	// @todo: person.$ = { firstName: "New", age: 28 } should proxify the affected object
-	console.log("Root", person.$);
-});
-
-export const Person = lookAt(function Person() {
 	return (
 		<div
 			style={{ display: "grid", gridTemplateColumns: "1fr", gridGap: 8 }}
@@ -74,4 +76,4 @@ export const Person = lookAt(function Person() {
 			</button>
 		</div>
 	);
-});
+};
