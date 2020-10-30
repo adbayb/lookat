@@ -165,6 +165,7 @@ const createObservable = <Value>(value: Value, globalObserver?: Observer) => {
 
 export const observable = <Value>(
 	value: Value | (() => Value),
+	// @todo: rename globalObserver (setterHook? observableHook?...)
 	globalObserver?: Observer
 ): Observable<Value> => {
 	if (typeof value !== "function") {

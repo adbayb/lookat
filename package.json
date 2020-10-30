@@ -1,4 +1,7 @@
 {
+	"main": "dist/lookat.js",
+	"module": "dist/lookat.m.js",
+	"source": "src/index.ts",
 	"author": {
 		"name": "Ayoub Adib",
 		"email": "adbayb@gmail.com",
