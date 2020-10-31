@@ -1,4 +1,5 @@
 {
+	"name": "lookat",
 	"main": "dist/lookat.js",
 	"module": "dist/lookat.m.js",
 	"source": "src/index.ts",

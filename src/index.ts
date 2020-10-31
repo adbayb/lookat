@@ -31,10 +31,10 @@ const isNativeFunction = (target: Record<string, unknown>, key: string) => {
 
 class ObservableHandler<Value extends Record<string, unknown>>
 	implements ProxyHandler<Value> {
-	globalObserver?: Observer;
+	eventHandlers?: ObservableHandlers;
 
-	constructor(observer?: Observer) {
-		this.globalObserver = observer;
+	constructor(eventHandlers?: ObservableHandlers) {
+		this.eventHandlers = eventHandlers;
 	}
 
 	get(...args: Parameters<NonNullable<ProxyHandler<Value>["get"]>>) {
@@ -45,7 +45,6 @@ class ObservableHandler<Value extends Record<string, unknown>>
 
 		// console.log(`get->${key}`, target, target[key]);
 
-		// @section: observer subscriptions
 		if (currentObserver && !isNativeFunction(target, key)) {
 			const callbacks = context.observers.get(target) || {};
 			// @note: we map current observer to all traversed properties (not only the last accessed property)
@@ -64,26 +63,29 @@ class ObservableHandler<Value extends Record<string, unknown>>
 			}
 		}
 
+		if (typeof this.eventHandlers?.onGet === "function") {
+			this.eventHandlers.onGet(target, key, value);
+		}
+
 		return isObject(value)
-			? proxify(value, this.globalObserver)
+			? proxify(value, this.eventHandlers)
 			: Reflect.get(...args);
 	}
 
 	set(...args: Parameters<NonNullable<ProxyHandler<Value>["set"]>>) {
 		const target = args[0];
-		const key = args[1] as string;
+		const key = args[1] as string | number;
 		const oldValue = target[key];
 		// @note: we mutate before notifying to let observers get mutated value
-		const result = Reflect.set(...args);
+		const newValue = Reflect.set(...args);
 		const needsUpdate = oldValue !== target[key];
 		const observers = context.observers.get(target)?.[key];
 
 		// console.warn(`set->${key}`, ...args);
 
-		// @section: notify
 		if (needsUpdate) {
-			if (this.globalObserver) {
-				this.globalObserver();
+			if (typeof this.eventHandlers?.onSet === "function") {
+				this.eventHandlers.onSet(target, key, oldValue, newValue);
 			}
 
 			if (observers) {
@@ -91,19 +93,19 @@ class ObservableHandler<Value extends Record<string, unknown>>
 			}
 		}
 
-		return result;
+		return newValue;
 	}
 
 	deleteProperty(
 		...args: Parameters<NonNullable<ProxyHandler<Value>["deleteProperty"]>>
 	) {
 		const target = args[0];
-		const key = args[1] as string;
+		const key = args[1] as string | number;
 		const result = Reflect.deleteProperty(...args);
 		const targetObservers = context.observers.get(target);
 
-		if (this.globalObserver) {
-			this.globalObserver();
+		if (typeof this.eventHandlers?.onDeleteProperty === "function") {
+			this.eventHandlers.onDeleteProperty(target, key);
 		}
 
 		if (targetObservers) {
@@ -145,41 +147,53 @@ export const observe = (callback: VoidFunction) => {
 	createObserver(callback)();
 };
 
-const proxify = (target: Target, globalObserver?: Observer): Target => {
+const proxify = (
+	target: Target,
+	eventHandlers?: ObservableHandlers
+): Target => {
 	const storedProxy = context.proxies.get(target);
 
 	if (storedProxy) {
 		return storedProxy;
 	}
 
-	const proxy = new Proxy(target, new ObservableHandler(globalObserver));
+	const proxy = new Proxy(target, new ObservableHandler(eventHandlers));
 
 	context.proxies.set(target, proxy);
 
 	return proxy;
 };
 
-const createObservable = <Value>(value: Value, globalObserver?: Observer) => {
-	return proxify({ $: value }, globalObserver) as Observable<Value>;
+type ObservableSource<Value> = Value | (() => Value);
+
+type ObservableHandlers = {
+	onSet?: (
+		target: Target,
+		key: PropertyKey,
+		oldValue: unknown,
+		newValue: unknown
+	) => void;
+	onDeleteProperty?: (target: Target, key: PropertyKey) => void;
+	onGet?: (target: Target, key: PropertyKey, value: unknown) => void;
 };
 
-export const observable = <Value>(
-	value: Value | (() => Value),
-	// @todo: rename globalObserver (setterHook? observableHook?...)
-	globalObserver?: Observer
+export const createObservable = <Value>(
+	value: ObservableSource<Value>,
+	eventHandlers?: ObservableHandlers
 ): Observable<Value> => {
-	if (typeof value !== "function") {
-		return createObservable(value, globalObserver);
+	const observableValue = proxify(
+		{ $: typeof value !== "function" ? value : undefined },
+		eventHandlers
+	) as Observable<Value>;
+
+	if (typeof value === "function") {
+		observe(() => {
+			observableValue.$ = (value as () => Value)();
+		});
 	}
 
-	const computedObservable: Observable<Value> = createObservable(
-		undefined!,
-		globalObserver
-	);
-
-	observe(() => {
-		computedObservable.$ = (value as () => Value)();
-	});
-
-	return computedObservable;
+	return observableValue;
 };
+
+export const observable = <Value>(value: ObservableSource<Value>) =>
+	createObservable(value);

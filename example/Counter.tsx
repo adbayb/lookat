@@ -1,5 +1,4 @@
 import * as React from "react";
-// import { observable, observe } from "../src";
 import { useObservable, useObserver } from "./react";
 
 // setInterval(() => {
