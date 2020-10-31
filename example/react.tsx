@@ -11,8 +11,17 @@ export const useObservable = <Value extends unknown>(value: Value) => {
 	const observableValue = useMemo(
 		() =>
 			createObservable(value, {
-				onSet: commitUpdate,
-				onDeleteProperty: commitUpdate,
+				onUpdate(...args) {
+					console.log("ONUPDATE", ...args);
+					commitUpdate();
+				},
+				onDelete(...args) {
+					console.log("ONDELETE", ...args);
+					commitUpdate();
+				},
+				// onRead: (...args) => {
+				// 	console.warn("AYOUBBBBB", args);
+				// },
 			}),
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[]

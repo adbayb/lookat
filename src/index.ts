@@ -3,7 +3,7 @@ export type Observable<Value> = { $: Value };
 
 export type Observer = VoidFunction;
 
-type Target = Record<string, unknown>;
+type Target = Record<PropertyKey, unknown>;
 
 type Context = {
 	currentObserver: Observer | null;
@@ -32,13 +32,11 @@ const createProxyHandler = (
 	eventHandlers?: ObservableHandlers
 ): ProxyHandler<Target> => {
 	return {
-		get(...args) {
+		get(target, key: string | number, ...restArgs) {
 			const { currentObserver } = context;
-			const target = args[0];
-			const key = args[1] as string;
 			const value = target[key];
 
-			// console.log(`get->${key}`, target, target[key]);
+			// console.log(`get->${key}`);
 
 			if (
 				currentObserver &&
@@ -62,20 +60,18 @@ const createProxyHandler = (
 				}
 			}
 
-			if (typeof eventHandlers?.onGet === "function") {
-				eventHandlers.onGet(target, key, value);
+			if (typeof eventHandlers?.onRead === "function") {
+				eventHandlers.onRead(target, key, value);
 			}
 
 			return isObject(value)
 				? proxify(value, eventHandlers)
-				: Reflect.get(...args);
+				: Reflect.get(target, key, ...restArgs);
 		},
-		set(...args) {
-			const target = args[0];
-			const key = args[1] as string | number;
+		set(target, key: string | number, ...restArgs) {
 			const oldValue = target[key];
 			// @note: we mutate before notifying to let observers get mutated value
-			const result = Reflect.set(...args);
+			const result = Reflect.set(target, key, ...restArgs);
 			const newValue = target[key];
 			const needsUpdate = isNativePropertyKey(key)
 				? // @note: some set trap are called too late after their mutation
@@ -90,11 +86,11 @@ const createProxyHandler = (
 				: oldValue !== newValue;
 			const observers = context.observers.get(target)?.[key];
 
-			// console.warn(`set->${key}`, ...args);
+			// console.warn(`set->${key}`);
 
 			if (needsUpdate) {
-				if (typeof eventHandlers?.onSet === "function") {
-					eventHandlers.onSet(target, key, oldValue, newValue);
+				if (typeof eventHandlers?.onUpdate === "function") {
+					eventHandlers.onUpdate(target, key, oldValue, newValue);
 				}
 
 				if (observers) {
@@ -104,14 +100,12 @@ const createProxyHandler = (
 
 			return result;
 		},
-		deleteProperty(...args) {
-			const target = args[0];
-			const key = args[1] as string | number;
-			const result = Reflect.deleteProperty(...args);
+		deleteProperty(target, key: string | number, ...restArgs) {
+			const result = Reflect.deleteProperty(target, key, ...restArgs);
 			const targetObservers = context.observers.get(target);
 
-			if (typeof eventHandlers?.onDeleteProperty === "function") {
-				eventHandlers.onDeleteProperty(target, key);
+			if (typeof eventHandlers?.onDelete === "function") {
+				eventHandlers.onDelete(target, key);
 			}
 
 			if (targetObservers) {
@@ -156,6 +150,7 @@ export const observe = (callback: VoidFunction) => {
 
 const proxify = (
 	target: Target,
+	// if eventHandlers is defined the first time <=> we're at the root level
 	eventHandlers?: ObservableHandlers
 ): Target => {
 	const storedProxy = context.proxies.get(target);
@@ -173,35 +168,15 @@ const proxify = (
 
 type ObservableSource<Value> = Value | (() => Value);
 
-/*
 type ObservableHandlers = {
-	onMutate?: (type: "set" | "delete", target, targetKeys: PropertyKey[])
-}
-
-type ObservableLifecycleListener = {
-	create
-	read
-	update
-	delete
-}
-
-type ObservableHooks = {
-	beforeMutation
-	afterMutation
-	beforeGet
-	afterGet
-}
-*/
-
-type ObservableHandlers = {
-	onSet?: (
+	onUpdate?: (
 		target: Target,
 		key: PropertyKey,
 		oldValue: unknown,
 		newValue: unknown
 	) => void;
-	onDeleteProperty?: (target: Target, key: PropertyKey) => void;
-	onGet?: (target: Target, key: PropertyKey, value: unknown) => void;
+	onDelete?: (target: Target, key: PropertyKey) => void;
+	onRead?: (target: Target, key: PropertyKey, value: unknown) => void;
 };
 
 export const createObservable = <Value>(

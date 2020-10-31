@@ -2,7 +2,11 @@ import React, { useEffect } from "react";
 import { useObservable, useObserver } from "./react";
 
 export const Person = () => {
-	const person = useObservable({ firstName: "Ayoub", age: 28 });
+	const person = useObservable({
+		firstName: "Ayoub",
+		age: 28,
+		children: [{ firstName: "Mohamed" }],
+	});
 
 	useEffect(() => {
 		setInterval(() => {
@@ -59,7 +63,7 @@ export const Person = () => {
 			</button>
 			<button
 				onClick={() => {
-					person.$ = { firstName: "Unknown", age: 99 };
+					person.$ = { firstName: "Unknown", age: 99, children: [] };
 				}}
 			>
 				Change person identity (new object)
@@ -73,6 +77,13 @@ export const Person = () => {
 				}}
 			>
 				Alter shape (new object with new shape)
+			</button>
+			<button
+				onClick={() => {
+					person.$.children.push({ firstName: "Sirine" });
+				}}
+			>
+				Add child
 			</button>
 		</div>
 	);
