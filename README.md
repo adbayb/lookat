@@ -34,11 +34,12 @@ unwrap(isPair) // returns raw value of an observable
         counter.$++;
         }
         observe(() => {
-        counter.$ // <- Should be called one time and not two
-    })
-    - Optimize same observer calls if the side effect relies on computed observables
-    const counter = observable(0);
-    const counterSquare = observe(() => counter.$2);
+        counter.\$ // <- Should be called one time and not two
+        })
+
+    -   Optimize same observer calls if the side effect relies on computed observables
+        const counter = observable(0);
+        const counterSquare = observe(() => counter.$2);
         observe(() => {
         console.log("Counter Quatro = ", counter.$, " ", counterSquare.\$);
         });
