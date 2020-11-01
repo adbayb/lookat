@@ -5,16 +5,27 @@ export type Observer = VoidFunction;
 
 type Target = Record<PropertyKey, unknown>;
 
+type ObservableSource<Value> = Value | (() => Value);
+
+type ObservableHandlers = {
+	onUpdate?: (
+		target: Target,
+		key: PropertyKey,
+		oldValue: unknown,
+		newValue: unknown
+	) => void;
+	onDelete?: (target: Target, key: PropertyKey) => void;
+	onRead?: (target: Target, key: PropertyKey, value: unknown) => void;
+};
+
 type Context = {
 	currentObserver: Observer | null;
-	observers: WeakMap<Target, Record<string, Observer[]>>;
-	proxies: WeakMap<Target, Target>;
+	observersByObservable: WeakMap<Target, Record<PropertyKey, Observer[]>>;
 };
 
 const context: Context = {
 	currentObserver: null,
-	observers: new WeakMap(),
-	proxies: new WeakMap(),
+	observersByObservable: new WeakMap(),
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> => {
@@ -28,11 +39,20 @@ const isNativePropertyKey = (key: PropertyKey) => {
 	);
 };
 
+// @note: cast to string since symbol cannot be yet used as index in TypeScript...
+// @see: https://github.com/microsoft/TypeScript/issues/1863
+const lookAtFootprintSymbol = (Symbol("LookAt") as unknown) as string;
+
 const createProxyHandler = (
 	eventHandlers?: ObservableHandlers
 ): ProxyHandler<Target> => {
 	return {
+		// @note: key cast to string | number to avoid errors due to https://github.com/microsoft/TypeScript/issues/1863
 		get(target, key: string | number, ...restArgs) {
+			if (key === lookAtFootprintSymbol) {
+				return true;
+			}
+
 			const { currentObserver } = context;
 			const value = target[key];
 
@@ -43,7 +63,8 @@ const createProxyHandler = (
 				// @note: we do not observer native built-in function (since stable in normal conditions)
 				!(isNativePropertyKey(key) && typeof target[key] === "function")
 			) {
-				const callbacks = context.observers.get(target) || {};
+				const callbacks =
+					context.observersByObservable.get(target) || {};
 				// @note: we map current observer to all traversed properties (not only the last accessed property)
 				// to allow nested observers to be notified in case of parent properties reset.
 				// For example, if we have following observable shape: person = { firstName: "Ayoub", age: 28 }
@@ -56,7 +77,7 @@ const createProxyHandler = (
 					propertyCallbacks.push(currentObserver);
 					callbacks[key] = propertyCallbacks;
 
-					context.observers.set(target, callbacks);
+					context.observersByObservable.set(target, callbacks);
 				}
 			}
 
@@ -64,9 +85,22 @@ const createProxyHandler = (
 				eventHandlers.onRead(target, key, value);
 			}
 
-			return isObject(value)
-				? proxify(value, eventHandlers)
-				: Reflect.get(target, key, ...restArgs);
+			if (isObject(value)) {
+				// eslint-disable-next-line no-underscore-dangle
+				if (!value[lookAtFootprintSymbol]) {
+					// @note: we memoize the proxy affectation inside the target object
+					// to avoid recreating new proxy eac time we try to access to a given property
+					target[key] = new Proxy(
+						value,
+						createProxyHandler(eventHandlers)
+					);
+				}
+
+				return target[key];
+			}
+
+			// @todo: https://stackoverflow.com/questions/41299642/how-to-use-javascript-proxy-for-nested-objects
+			return Reflect.get(target, key, ...restArgs);
 		},
 		set(target, key: string | number, ...restArgs) {
 			const oldValue = target[key];
@@ -84,7 +118,7 @@ const createProxyHandler = (
 				  // It should not give false positives since native property key setters might always come from a mutation but we need to be vigilant about this potential issue source...
 				  true
 				: oldValue !== newValue;
-			const observers = context.observers.get(target)?.[key];
+			const observers = context.observersByObservable.get(target)?.[key];
 
 			// console.warn(`set->${key}`);
 
@@ -102,7 +136,7 @@ const createProxyHandler = (
 		},
 		deleteProperty(target, key: string | number, ...restArgs) {
 			const result = Reflect.deleteProperty(target, key, ...restArgs);
-			const targetObservers = context.observers.get(target);
+			const targetObservers = context.observersByObservable.get(target);
 
 			if (typeof eventHandlers?.onDelete === "function") {
 				eventHandlers.onDelete(target, key);
@@ -148,44 +182,13 @@ export const observe = (callback: VoidFunction) => {
 	createObserver(callback)();
 };
 
-const proxify = (
-	target: Target,
-	// if eventHandlers is defined the first time <=> we're at the root level
-	eventHandlers?: ObservableHandlers
-): Target => {
-	const storedProxy = context.proxies.get(target);
-
-	if (storedProxy) {
-		return storedProxy;
-	}
-
-	const proxy = new Proxy(target, createProxyHandler(eventHandlers));
-
-	context.proxies.set(target, proxy);
-
-	return proxy;
-};
-
-type ObservableSource<Value> = Value | (() => Value);
-
-type ObservableHandlers = {
-	onUpdate?: (
-		target: Target,
-		key: PropertyKey,
-		oldValue: unknown,
-		newValue: unknown
-	) => void;
-	onDelete?: (target: Target, key: PropertyKey) => void;
-	onRead?: (target: Target, key: PropertyKey, value: unknown) => void;
-};
-
 export const createObservable = <Value>(
 	value: ObservableSource<Value>,
 	eventHandlers?: ObservableHandlers
 ) => {
-	const observableValue = proxify(
+	const observableValue = new Proxy(
 		{ $: typeof value !== "function" ? value : undefined },
-		eventHandlers
+		createProxyHandler(eventHandlers)
 	) as Observable<Value>;
 
 	if (typeof value === "function") {

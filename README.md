@@ -1,4 +1,4 @@
-# lookat
+# LookAt
 
 An observer/observable library
 
