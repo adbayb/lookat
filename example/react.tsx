@@ -12,15 +12,15 @@ export const useObservable = <Value extends unknown>(value: Value) => {
 		() =>
 			createObservable(value, {
 				onUpdate(...args) {
-					console.log("ONUPDATE", ...args);
+					console.log("ONUPDATE", args, Boolean(args[1]));
 					commitUpdate();
 				},
-				onDelete(...args) {
-					console.log("ONDELETE", ...args);
+				onDelete() {
+					// console.log("ONDELETE", args);
 					commitUpdate();
 				},
 				// onRead: (...args) => {
-				// 	console.warn("AYOUBBBBB", args);
+				// 	console.warn("ONREAD", ...args);
 				// },
 			}),
 		// eslint-disable-next-line react-hooks/exhaustive-deps

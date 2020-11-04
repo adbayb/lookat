@@ -1,21 +1,18 @@
-/* eslint-disable no-prototype-builtins */
+/* eslint-disable @typescript-eslint/no-explicit-any, no-prototype-builtins */
 export type Observable<Value> = { $: Value };
 
 export type Observer = VoidFunction;
 
-type Target = Record<PropertyKey, unknown>;
+type PropertyKey = string | number;
+
+type Target = Record<PropertyKey, any>;
 
 type ObservableSource<Value> = Value | (() => Value);
 
 type ObservableHandlers = {
-	onUpdate?: (
-		target: Target,
-		key: PropertyKey,
-		oldValue: unknown,
-		newValue: unknown
-	) => void;
-	onDelete?: (target: Target, key: PropertyKey) => void;
-	onRead?: (target: Target, key: PropertyKey, value: unknown) => void;
+	onUpdate?: (keys: PropertyKey[], value: any, prevValue: any) => void;
+	onDelete?: (keys: PropertyKey[]) => void;
+	onRead?: (keys: PropertyKey[], value: any) => void;
 };
 
 type Context = {
@@ -28,7 +25,7 @@ const context: Context = {
 	observersByObservable: new WeakMap(),
 };
 
-const isObject = (value: unknown): value is Record<string, unknown> => {
+const isObject = (value: unknown): value is Target => {
 	return typeof value === "object" && value !== null;
 };
 
@@ -44,11 +41,16 @@ const isNativePropertyKey = (key: PropertyKey) => {
 const lookAtFootprintSymbol = (Symbol("LookAt") as unknown) as string;
 
 const createProxyHandler = (
+	keyCollection: PropertyKey[],
 	eventHandlers?: ObservableHandlers
 ): ProxyHandler<Target> => {
+	const getCurrentKeys = (key: PropertyKey) => {
+		return [...keyCollection, key];
+	};
+
 	return {
-		// @note: key cast to string | number to avoid errors due to https://github.com/microsoft/TypeScript/issues/1863
-		get(target, key: string | number, ...restArgs) {
+		// @note: key cast to custom PropertyKey (string | number) to avoid errors due to https://github.com/microsoft/TypeScript/issues/1863
+		get(target, key: PropertyKey, ...restArgs) {
 			if (key === lookAtFootprintSymbol) {
 				return true;
 			}
@@ -81,9 +83,9 @@ const createProxyHandler = (
 				}
 			}
 
-			if (typeof eventHandlers?.onRead === "function") {
-				eventHandlers.onRead(target, key, value);
-			}
+			const keys = getCurrentKeys(key);
+
+			eventHandlers?.onRead?.(getCurrentKeys(key), value);
 
 			if (isObject(value)) {
 				// eslint-disable-next-line no-underscore-dangle
@@ -92,18 +94,17 @@ const createProxyHandler = (
 					// to avoid recreating new proxy eac time we try to access to a given property
 					target[key] = new Proxy(
 						value,
-						createProxyHandler(eventHandlers)
+						createProxyHandler(keys, eventHandlers)
 					);
 				}
 
 				return target[key];
 			}
 
-			// @todo: https://stackoverflow.com/questions/41299642/how-to-use-javascript-proxy-for-nested-objects
 			return Reflect.get(target, key, ...restArgs);
 		},
-		set(target, key: string | number, ...restArgs) {
-			const oldValue = target[key];
+		set(target, key: PropertyKey, ...restArgs) {
+			const prevValue = target[key];
 			// @note: we mutate before notifying to let observers get mutated value
 			const result = Reflect.set(target, key, ...restArgs);
 			const newValue = target[key];
@@ -117,30 +118,40 @@ const createProxyHandler = (
 				  // To solve it, we exclude native property from the `needsUpdate` flag evaluation: an update will be always needed for native property key (Object and Array).
 				  // It should not give false positives since native property key setters might always come from a mutation but we need to be vigilant about this potential issue source...
 				  true
-				: oldValue !== newValue;
-			const observers = context.observersByObservable.get(target)?.[key];
+				: prevValue !== newValue;
+
+			if (!needsUpdate) {
+				return result;
+			}
 
 			// console.warn(`set->${key}`);
+			const currentKeys = getCurrentKeys(key);
 
-			if (needsUpdate) {
-				if (typeof eventHandlers?.onUpdate === "function") {
-					eventHandlers.onUpdate(target, key, oldValue, newValue);
-				}
+			eventHandlers?.onUpdate?.(currentKeys, newValue, prevValue);
 
-				if (observers) {
-					observers.forEach((observer) => observer());
-				}
-			}
+			const observers = context.observersByObservable.get(target)?.[key];
+
+			observers?.forEach((observer) => observer());
 
 			return result;
 		},
 		deleteProperty(target, key: string | number, ...restArgs) {
+			const needsUpdate = key in target;
 			const result = Reflect.deleteProperty(target, key, ...restArgs);
+
+			if (!needsUpdate) {
+				return result;
+			}
+
 			const targetObservers = context.observersByObservable.get(target);
 
-			if (typeof eventHandlers?.onDelete === "function") {
-				eventHandlers.onDelete(target, key);
-			}
+			// console.warn(
+			// 	`delete->${key}`,
+			// 	[...keyCollection, key],
+			// 	key in target
+			// );
+
+			eventHandlers?.onDelete?.(getCurrentKeys(key));
 
 			if (targetObservers) {
 				const observers = targetObservers?.[key];
@@ -188,7 +199,7 @@ export const createObservable = <Value>(
 ) => {
 	const observableValue = new Proxy(
 		{ $: typeof value !== "function" ? value : undefined },
-		createProxyHandler(eventHandlers)
+		createProxyHandler([], eventHandlers)
 	) as Observable<Value>;
 
 	if (typeof value === "function") {
