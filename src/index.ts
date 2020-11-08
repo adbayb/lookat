@@ -18,11 +18,19 @@ type ObservableHandlers = {
 type Context = {
 	currentObserver: Observer | null;
 	observersByObservable: WeakMap<Target, Record<PropertyKey, Observer[]>>;
+	currentMutationBatch: {
+		id: ReturnType<typeof setTimeout> | undefined;
+		observerQueue: Set<Observer>;
+	};
 };
 
 const context: Context = {
 	currentObserver: null,
 	observersByObservable: new WeakMap(),
+	currentMutationBatch: {
+		id: undefined,
+		observerQueue: new Set(),
+	},
 };
 
 const isObject = (value: unknown): value is Target => {
@@ -129,9 +137,26 @@ const createProxyHandler = (
 
 			eventHandlers?.onUpdate?.(currentKeys, newValue, prevValue);
 
-			const observers = context.observersByObservable.get(target)?.[key];
+			const { observersByObservable, currentMutationBatch } = context;
+			const observers = observersByObservable.get(target)?.[key];
 
-			observers?.forEach((observer) => observer());
+			// @section: batched mutations management
+			// @todo: Batch eventHandlers onUpdate lifecycle + Batch delete operations
+			// @todo: refactor to share mutation logic between set and delete
+			observers?.forEach((observer) =>
+				currentMutationBatch.observerQueue.add(observer)
+			);
+
+			if (currentMutationBatch.id) {
+				clearTimeout(currentMutationBatch.id);
+			}
+
+			currentMutationBatch.id = setTimeout(() => {
+				currentMutationBatch.observerQueue.forEach((observer) =>
+					observer()
+				);
+				currentMutationBatch.observerQueue.clear();
+			}, 0);
 
 			return result;
 		},

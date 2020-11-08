@@ -2,6 +2,19 @@ import { observable } from "../src";
 import { observe } from "../src";
 
 const INITIAL_OBSERVE_COUNT = 1;
+let spiedSetTimeout: jest.SpyInstance;
+
+beforeEach(() => {
+	spiedSetTimeout = jest.spyOn(global, "setTimeout");
+
+	spiedSetTimeout.mockImplementation((callback: VoidFunction) => {
+		callback();
+	});
+});
+
+afterEach(() => {
+	spiedSetTimeout.mockReset();
+});
 
 describe("core", () => {
 	test("should observe update", () => {
@@ -67,6 +80,29 @@ describe("core", () => {
 		nestedState.$++;
 		expect(callback).toHaveBeenCalledTimes(INITIAL_OBSERVE_COUNT + 2);
 	});
+
+	test("should batch updates", () => {
+		jest.useFakeTimers();
+
+		const counter = observable(0);
+		const callback = jest.fn(() => {
+			counter.$;
+		});
+		const multipleUpdates = () => {
+			counter.$++;
+			counter.$++;
+			counter.$++;
+			counter.$++;
+			counter.$++;
+		};
+
+		observe(callback);
+
+		expect(callback).toHaveBeenCalledTimes(INITIAL_OBSERVE_COUNT);
+		multipleUpdates();
+		jest.runAllTimers();
+		expect(callback).toHaveBeenCalledTimes(INITIAL_OBSERVE_COUNT + 1);
+	});
 });
 
 describe("object", () => {
@@ -109,8 +145,6 @@ describe("object", () => {
 		// @ts-ignore
 		person.$ = {};
 
-		// @todo: should be fine (working as expected in a non test environment)
-		// Check why jest handles it differently
 		expect(handleFirstNameChange).toHaveBeenCalledTimes(
 			INITIAL_OBSERVE_COUNT + 1
 		);
@@ -136,13 +170,13 @@ describe("object", () => {
 		// Then handleChangeWithStoredReference should not be notified since it relies on the old hasChild reference
 		state.$.hasChild = { hasGrandChild: false };
 
-		// @todo: should be fine (working as expected in a non test environment)
-		// Check why jest handles it differently
 		expect(handleChange).toHaveBeenCalledTimes(INITIAL_OBSERVE_COUNT + 1);
 		expect(handleChangeWithStoredReference).toHaveBeenCalledTimes(
 			INITIAL_OBSERVE_COUNT
 		);
 	});
+
+	// @todo: should observe delete operations
 });
 
 describe("array", () => {
