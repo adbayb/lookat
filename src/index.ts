@@ -10,9 +10,9 @@ type Target = Record<PropertyKey, any>;
 type ObservableSource<Value> = Value | (() => Value);
 
 type ObservableHandlers = {
-	onUpdate?: (keys: PropertyKey[], value: any, prevValue: any) => void;
-	onDelete?: (keys: PropertyKey[]) => void;
-	onRead?: (keys: PropertyKey[], value: any) => void;
+	onUpdate?: (keyPath: PropertyKey[], value: any, prevValue: any) => void;
+	onDelete?: (keyPath: PropertyKey[]) => void;
+	onRead?: (keyPath: PropertyKey[], value: any) => void;
 };
 
 type Context = {
@@ -49,11 +49,54 @@ const isNativePropertyKey = (key: PropertyKey) => {
 const lookAtFootprintSymbol = (Symbol("LookAt") as unknown) as string;
 
 const createProxyHandler = (
-	keyCollection: PropertyKey[],
+	rootKeyPath: PropertyKey[],
 	eventHandlers?: ObservableHandlers
 ): ProxyHandler<Target> => {
-	const getCurrentKeys = (key: PropertyKey) => {
-		return [...keyCollection, key];
+	const getKeyPath = (key: PropertyKey) => {
+		return [...rootKeyPath, key];
+	};
+
+	// @todo: move this function outside createProxyHandler to avoid uneeded closure memory extra allocation
+	const handleMutation = (
+		target: Target,
+		key: PropertyKey,
+		onChange: (keyPath: PropertyKey[]) => void,
+		onNotifyObservers?: (
+			observersByProperty: Record<PropertyKey, Observer[]>
+		) => void
+	) => {
+		const keyPath = getKeyPath(key);
+
+		onChange(keyPath);
+
+		const { observersByObservable, currentMutationBatch } = context;
+		const targetObservers = observersByObservable.get(target);
+
+		// @section: batched mutations management
+		// @todo: Batch onChange + Batch delete operations
+		// @todo: refactor to share mutation logic between set and delete
+		if (targetObservers) {
+			const observers = targetObservers[key];
+
+			if (observers) {
+				observers.forEach((observer) =>
+					currentMutationBatch.observerQueue.add(observer)
+				);
+
+				onNotifyObservers?.(targetObservers);
+			}
+		}
+
+		if (currentMutationBatch.id) {
+			clearTimeout(currentMutationBatch.id);
+		}
+
+		currentMutationBatch.id = setTimeout(() => {
+			currentMutationBatch.observerQueue.forEach((observer) =>
+				observer()
+			);
+			currentMutationBatch.observerQueue.clear();
+		}, 0);
 	};
 
 	return {
@@ -91,9 +134,9 @@ const createProxyHandler = (
 				}
 			}
 
-			const keys = getCurrentKeys(key);
+			const keyPath = getKeyPath(key);
 
-			eventHandlers?.onRead?.(getCurrentKeys(key), value);
+			eventHandlers?.onRead?.(keyPath, value);
 
 			if (isObject(value)) {
 				// eslint-disable-next-line no-underscore-dangle
@@ -102,7 +145,7 @@ const createProxyHandler = (
 					// to avoid recreating new proxy eac time we try to access to a given property
 					target[key] = new Proxy(
 						value,
-						createProxyHandler(keys, eventHandlers)
+						createProxyHandler(keyPath, eventHandlers)
 					);
 				}
 
@@ -133,30 +176,10 @@ const createProxyHandler = (
 			}
 
 			// console.warn(`set->${key}`);
-			const currentKeys = getCurrentKeys(key);
 
-			eventHandlers?.onUpdate?.(currentKeys, newValue, prevValue);
-
-			const { observersByObservable, currentMutationBatch } = context;
-			const observers = observersByObservable.get(target)?.[key];
-
-			// @section: batched mutations management
-			// @todo: Batch eventHandlers onUpdate lifecycle + Batch delete operations
-			// @todo: refactor to share mutation logic between set and delete
-			observers?.forEach((observer) =>
-				currentMutationBatch.observerQueue.add(observer)
+			handleMutation(target, key, (keyPath) =>
+				eventHandlers?.onUpdate?.(keyPath, newValue, prevValue)
 			);
-
-			if (currentMutationBatch.id) {
-				clearTimeout(currentMutationBatch.id);
-			}
-
-			currentMutationBatch.id = setTimeout(() => {
-				currentMutationBatch.observerQueue.forEach((observer) =>
-					observer()
-				);
-				currentMutationBatch.observerQueue.clear();
-			}, 0);
 
 			return result;
 		},
@@ -168,24 +191,18 @@ const createProxyHandler = (
 				return result;
 			}
 
-			const targetObservers = context.observersByObservable.get(target);
-
 			// console.warn(
 			// 	`delete->${key}`,
 			// 	[...keyCollection, key],
 			// 	key in target
 			// );
 
-			eventHandlers?.onDelete?.(getCurrentKeys(key));
-
-			if (targetObservers) {
-				const observers = targetObservers?.[key];
-
-				if (observers) {
-					observers.forEach((observer) => observer());
-					delete targetObservers[key];
-				}
-			}
+			handleMutation(
+				target,
+				key,
+				(keyPath) => eventHandlers?.onDelete?.(keyPath),
+				(targetObservers) => delete targetObservers[key]
+			);
 
 			return result;
 		},

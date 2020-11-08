@@ -12,13 +12,7 @@ export const Counter = () => {
 	console.warn("Render");
 
 	useObserver(() => {
-		// @tofix: fix observe primitive to avoid calling observer if the next value doesn't change
 		console.log("Source:", counter.$);
-		// @tofix: adding another observable causes double calls
-		// console.log("Computed:", derivedCounter.$);
-	});
-
-	useObserver(() => {
 		console.log("Computed:", derivedCounter.$);
 	});
 
