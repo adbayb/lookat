@@ -9,11 +9,9 @@ type Target = Record<PropertyKey, any>;
 
 type ObservableSource<Value> = Value | (() => Value);
 
-type ObservableHandlers = {
-	onUpdate?: (keyPath: PropertyKey[], value: any, prevValue: any) => void;
-	onDelete?: (keyPath: PropertyKey[]) => void;
-	onRead?: (keyPath: PropertyKey[], value: any) => void;
-};
+type MutationQueue = Array<{ type: "set" | "delete"; keyPath: PropertyKey[] }>;
+
+type MutationHandler = (data: MutationQueue) => void;
 
 type Context = {
 	currentObserver: Observer | null;
@@ -21,6 +19,7 @@ type Context = {
 	currentMutationBatch: {
 		id: ReturnType<typeof setTimeout> | undefined;
 		observerQueue: Set<Observer>;
+		mutationQueue: MutationQueue;
 	};
 };
 
@@ -30,6 +29,7 @@ const context: Context = {
 	currentMutationBatch: {
 		id: undefined,
 		observerQueue: new Set(),
+		mutationQueue: [],
 	},
 };
 
@@ -50,7 +50,7 @@ const lookAtFootprintSymbol = (Symbol("LookAt") as unknown) as string;
 
 const createProxyHandler = (
 	rootKeyPath: PropertyKey[],
-	eventHandlers?: ObservableHandlers
+	onMutation?: MutationHandler
 ): ProxyHandler<Target> => {
 	const getKeyPath = (key: PropertyKey) => {
 		return [...rootKeyPath, key];
@@ -58,19 +58,15 @@ const createProxyHandler = (
 
 	// @todo: move this function outside createProxyHandler to avoid uneeded closure memory extra allocation
 	const handleMutation = (
+		type: "set" | "delete",
 		target: Target,
-		key: PropertyKey,
-		onChange: (keyPath: PropertyKey[]) => void,
-		onNotifyObservers?: (
-			observersByProperty: Record<PropertyKey, Observer[]>
-		) => void
+		key: PropertyKey
 	) => {
 		const keyPath = getKeyPath(key);
-
-		onChange(keyPath);
-
 		const { observersByObservable, currentMutationBatch } = context;
 		const targetObservers = observersByObservable.get(target);
+
+		currentMutationBatch.mutationQueue.push({ type, keyPath });
 
 		// @section: batched mutations management
 		// @todo: Batch onChange + Batch delete operations
@@ -83,7 +79,9 @@ const createProxyHandler = (
 					currentMutationBatch.observerQueue.add(observer)
 				);
 
-				onNotifyObservers?.(targetObservers);
+				if (type === "delete") {
+					delete targetObservers[key];
+				}
 			}
 		}
 
@@ -95,7 +93,10 @@ const createProxyHandler = (
 			currentMutationBatch.observerQueue.forEach((observer) =>
 				observer()
 			);
+			onMutation?.(currentMutationBatch.mutationQueue);
+
 			currentMutationBatch.observerQueue.clear();
+			currentMutationBatch.mutationQueue = [];
 		}, 0);
 	};
 
@@ -108,8 +109,6 @@ const createProxyHandler = (
 
 			const { currentObserver } = context;
 			const value = target[key];
-
-			// console.log(`get->${key}`);
 
 			if (
 				currentObserver &&
@@ -134,10 +133,6 @@ const createProxyHandler = (
 				}
 			}
 
-			const keyPath = getKeyPath(key);
-
-			eventHandlers?.onRead?.(keyPath, value);
-
 			if (isObject(value)) {
 				// eslint-disable-next-line no-underscore-dangle
 				if (!value[lookAtFootprintSymbol]) {
@@ -145,7 +140,7 @@ const createProxyHandler = (
 					// to avoid recreating new proxy eac time we try to access to a given property
 					target[key] = new Proxy(
 						value,
-						createProxyHandler(keyPath, eventHandlers)
+						createProxyHandler(getKeyPath(key), onMutation)
 					);
 				}
 
@@ -175,11 +170,7 @@ const createProxyHandler = (
 				return result;
 			}
 
-			// console.warn(`set->${key}`);
-
-			handleMutation(target, key, (keyPath) =>
-				eventHandlers?.onUpdate?.(keyPath, newValue, prevValue)
-			);
+			handleMutation("set", target, key);
 
 			return result;
 		},
@@ -191,18 +182,7 @@ const createProxyHandler = (
 				return result;
 			}
 
-			// console.warn(
-			// 	`delete->${key}`,
-			// 	[...keyCollection, key],
-			// 	key in target
-			// );
-
-			handleMutation(
-				target,
-				key,
-				(keyPath) => eventHandlers?.onDelete?.(keyPath),
-				(targetObservers) => delete targetObservers[key]
-			);
+			handleMutation("delete", target, key);
 
 			return result;
 		},
@@ -237,11 +217,11 @@ export const observe = (callback: VoidFunction) => {
 
 export const createObservable = <Value>(
 	value: ObservableSource<Value>,
-	eventHandlers?: ObservableHandlers
+	onMutation?: MutationHandler
 ) => {
 	const observableValue = new Proxy(
 		{ $: typeof value !== "function" ? value : undefined },
-		createProxyHandler([], eventHandlers)
+		createProxyHandler([], onMutation)
 	) as Observable<Value>;
 
 	if (typeof value === "function") {

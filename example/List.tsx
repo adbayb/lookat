@@ -20,6 +20,8 @@ export const List = () => {
 		list.$.forEach((item) => console.log("Updated3", item));
 	});
 
+	console.error("Render");
+
 	return (
 		<>
 			<div

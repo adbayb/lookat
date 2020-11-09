@@ -9,20 +9,16 @@ export const useObservable = <Value extends unknown>(value: Value) => {
 	const commitUpdate = () => forceUpdate((x) => x + 1);
 
 	const observableValue = useMemo(
-		() =>
-			createObservable(value, {
-				onUpdate(...args) {
-					console.log("ONUPDATE", args, Boolean(args[1]));
-					commitUpdate();
-				},
-				onDelete() {
-					// console.log("ONDELETE", args);
-					commitUpdate();
-				},
-				// onRead: (...args) => {
-				// 	console.warn("ONREAD", ...args);
-				// },
-			}),
+		() => {
+			const obs = createObservable(value, function handleMutation(
+				...args
+			) {
+				console.warn("MUTATION", ...args, obs);
+				commitUpdate();
+			});
+
+			return obs;
+		},
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[]
 	);
