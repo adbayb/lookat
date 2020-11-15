@@ -38,9 +38,8 @@ const isObject = (value: unknown): value is Target => {
 };
 
 const isNativePropertyKey = (key: PropertyKey) => {
-	return (
-		Object.prototype.hasOwnProperty(key) ||
-		Array.prototype.hasOwnProperty(key)
+	return [Object, Array, Map, Set].some((Ctr) =>
+		Ctr.prototype.hasOwnProperty(key)
 	);
 };
 
@@ -108,12 +107,12 @@ const createProxyHandler = (
 			}
 
 			const { currentObserver } = context;
-			const value = target[key];
+			const value = Reflect.get(target, key, ...restArgs);
 
 			if (
 				currentObserver &&
 				// @note: we do not observer native built-in function (since stable in normal conditions)
-				!(isNativePropertyKey(key) && typeof target[key] === "function")
+				!(isNativePropertyKey(key) && typeof value === "function")
 			) {
 				const callbacks =
 					context.observersByObservable.get(target) || {};
@@ -130,11 +129,14 @@ const createProxyHandler = (
 					callbacks[key] = propertyCallbacks;
 
 					context.observersByObservable.set(target, callbacks);
+
+					if (value instanceof Set || value instanceof Map) {
+						context.observersByObservable.set(value, callbacks);
+					}
 				}
 			}
 
 			if (isObject(value)) {
-				// eslint-disable-next-line no-underscore-dangle
 				if (!value[lookAtFootprintSymbol]) {
 					// @note: we memoize the proxy affectation inside the target object
 					// to avoid recreating new proxy eac time we try to access to a given property
@@ -147,7 +149,30 @@ const createProxyHandler = (
 				return target[key];
 			}
 
-			return Reflect.get(target, key, ...restArgs);
+			// @todo: https://stackoverflow.com/questions/43236329/why-is-proxy-to-a-map-object-in-es2015-not-working
+			if (
+				typeof value === "function" &&
+				(target instanceof Set || target instanceof Map)
+			) {
+				const mutableMapSetAPI: PropertyKey[] = [
+					// Map + Set
+					"clear",
+					"delete",
+					// Set specific
+					"add",
+					// Map specific:
+					"set",
+				];
+
+				if (mutableMapSetAPI.includes(key)) {
+					handleMutation("set", target, "$");
+				}
+
+				// @note: this line fixes Map/Set error but it lead to array push regression:
+				return value.bind(target);
+			}
+
+			return value;
 		},
 		set(target, key: PropertyKey, ...restArgs) {
 			const prevValue = target[key];

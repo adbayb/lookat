@@ -24,21 +24,15 @@ export const Person = () => {
 	});
 
 	useObserver(() => {
-		/* 
-			@note: For now, behavior limitation => not possible to call parent property if children property is updated
-			since it implies that all properties (from the parent root to the targeted children) are accessed inside the observer callback
-			@todo: let parent be notified from child change 
-			And check if it works with:
-	
-			const accessedFromOutside = person.$
-	
-			observe(() => {
-				accessedFromOutside;
-			})
-		*/
 		// @todo: person.$ = { firstName: "New", age: 28 } should proxify the affected object
 		console.log("Root", person.$);
 	});
+
+	useObserver(() => {
+		console.warn("Plop", person.$.firstName);
+	});
+
+	console.error("Render");
 
 	return (
 		<div
