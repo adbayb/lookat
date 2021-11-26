@@ -1,5 +1,5 @@
 import React from "react";
-import { useObservable, useObserver } from "./react";
+import { useObservable, useObserver } from "../src";
 
 export const List = () => {
 	const list = useObservable(["First", "Second"]);

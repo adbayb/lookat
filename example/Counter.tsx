@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useObservable, useObserver } from "./react";
+import { useObservable, useObserver } from "../src";
 
 export const Counter = () => {
 	const counter = useObservable(0);

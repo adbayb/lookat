@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Observer, createObservable, observe } from "../src";
+import { Observer, createObservable, observe } from "./core";
 
 // @note: not useful for non primitive observable. Since we track only the parent update (via the root property .$)
 // For example, if we have a property `child` (observable.$.child) and the child property is updated, the following
@@ -8,27 +8,16 @@ export const useObservable = <Value extends unknown>(value: Value) => {
 	const [, forceUpdate] = useState(0);
 	const commitUpdate = () => forceUpdate((x) => x + 1);
 
-	const observableValue = useMemo(
-		() => {
-			const obs = createObservable(value, function handleMutation(
-				...args
-			) {
-				console.warn("MUTATION", ...args, obs);
-				commitUpdate();
-			});
-
-			return obs;
-		},
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[]
-	);
-
-	return observableValue;
+	return useMemo(() => {
+		return createObservable(value, function handleMutation() {
+			// ...args
+			commitUpdate();
+		});
+	}, []);
 };
 
 export const useObserver = (observer: Observer) => {
 	useEffect(() => {
 		observe(observer);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 };

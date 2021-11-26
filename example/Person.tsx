@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { useObservable, useObserver } from "./react";
+import { useObservable, useObserver } from "../src";
 
 export const Person = () => {
 	const person = useObservable({
